@@ -1,0 +1,21 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 打包产物（发布时上传到 GitHub Releases，不进仓库）
+*.vnpkg
+
+# 临时文件、探针产出
+.tmp/
+*.log
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# 本地环境
+.env
+.env.local

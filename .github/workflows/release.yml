@@ -1,0 +1,58 @@
+name: release
+
+# 打 tag（v1.0.0 / v1.0.1 …）时自动构建并上传 .vnpkg 到 Release。
+# 也可以在 Actions 页面手动触发（workflow_dispatch），只产出 artifact 不发 Release。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack
+        run: npm run pack
+
+      - name: Verify package
+        run: node scripts/verify-package.js
+
+      - name: Collect artifact
+        run: |
+          mkdir -p out
+          cp dist/*.vnpkg out/
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vnpkg
+          path: out/*.vnpkg
+
+      - name: Create / update Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.vnpkg
+          generate_release_notes: false
+          body_path: docs/RELEASE_NOTES.md
