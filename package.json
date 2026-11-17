@@ -199,6 +199,7 @@
     "pack": "npm run build && npx vnite-plugin-sdk pack .",
     "stage": "node scripts/stage-release.js",
     "check:releases": "node scripts/check-releases.js",
+    "upload": "node scripts/upload-release.js",
     "release": "npm run pack && node scripts/stage-release.js",
     "clean": "rimraf dist",
     "prepack": "npm run build"

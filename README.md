@@ -379,7 +379,15 @@ npm run release            # = build + pack + 归档
 2. 归档到 `releases/v<版本号>/`：安装包 + 冻结的 `RELEASE_NOTES.md` + 该版本 `CHANGELOG.md` + `meta.json`（版本、打包时间、git commit、大小、sha256）+ `SHA256SUMS.txt`
 3. 刷新 `releases/CHANGELOG.md`（累积索引，新版本在上），并把整份产物镜像到仓库外的 `../character-atlas-releases-backup/`
 
-发布时只要进 `releases/v<版本号>/` 拿 `.vnpkg` 和 `RELEASE_NOTES.md` 即可。`releases/` 里的安装包被 git 跟踪（`.gitignore` 里开了例外），推到 GitHub 就是异地备份；仓库外那份镜像用来兜「目录被删 / 重装系统」。
+发布时只要进 `releases/v<版本号>/` 拿 `.vnpkg` 和 `RELEASE_NOTES.md` 即可；更省事的是**直接双击那个目录里的 `upload.cmd`** —— 脚本会自己确认 commit 已在 GitHub、按这个版本的 commit 建 tag（不会指向主分支最新）、建 Release、上传附件、回读校验。可重复运行，同名附件先删再传。
+
+```bash
+npm run upload                            # 发布当前版本
+node scripts/upload-release.js --version=1.1.0 --dry-run   # 演练，不联网写
+npm run check:releases                    # 发布前审计目录/包内版本/tag/sha256
+```
+
+上传需要一次性配 token：GitHub 建 PAT（classic 勾 `repo`；fine-grained 勾 Contents: Read and write），存到仓库根的 `.secrets/github-token`（已在 `.gitignore` 里）。`releases/` 里的安装包被 git 跟踪（`.gitignore` 里开了例外），推到 GitHub 就是异地备份；仓库外那份镜像用来兜「目录被删 / 重装系统」。
 
 补归档历史版本：`node scripts/stage-release.js --version=1.0.0`（需要 `dist/` 里还留着那个包；发布说明会从对应的 git tag 里取）。
 

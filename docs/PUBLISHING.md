@@ -126,7 +126,28 @@ git push origin v1.1.0
 
 如果 Actions 报 `npm ci` 失败：本地 `package-lock.json` 没提交，或 Node 版本不匹配。锁定 `node-version: 20` 已写在 workflow 里。
 
-### 3.2 手动发（Actions 不用）
+### 3.2 双击上传（脚本，最省事）
+
+`releases/v<版本号>/` 里带了 `upload.cmd`（双击）和 `upload.ps1`，也可以命令行跑：
+
+```bash
+npm run upload                                        # 当前版本
+node scripts/upload-release.js --version=1.1.0        # 指定版本
+node scripts/upload-release.js --version=1.1.0 --dry-run   # 只检查不联网
+```
+
+一次性配置 token（只需要做一次）：
+
+1. GitHub → Settings → Developer settings → Personal access tokens
+   - **classic**：勾 `repo`
+   - **fine-grained**：仓库选 `vnite-character-atlas`，权限勾 **Contents: Read and write**
+2. 在仓库根建目录 `.secrets`，放一个纯文本文件 `github-token`，内容是 token（`.secrets/` 已被 `.gitignore` 排除）
+
+脚本按顺序做：校验 `releases/v<版本号>/` 里的包（大小 + sha256 + 包内 manifest 版本）→ 确认这个版本的 commit 已在 GitHub → tag `v<版本号>` 不存在就**按该 commit** 创建（这一步专治「tag 打在 main 最新 commit 上」）→ 建 Release（非 draft / 非 prerelease，正文用冻结的 `RELEASE_NOTES.md`）→ 上传 `.vnpkg`（同名附件先删再传，可重复运行）→ 回读确认并打印下载地址。
+
+它的好处是**完全不依赖 git push**：只要 `api.github.com` 通（很多时候 `github.com` 被墙但 API 是通的），就能发布；前提是那个 commit 已经在远端仓库里。
+
+### 3.3 手动发（Actions 和脚本都不用）
 
 **Releases → Draft a new release**：
 

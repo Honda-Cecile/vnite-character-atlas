@@ -9,8 +9,8 @@
   "sha256": "700a4c990daf2d3d6b7e61b1733fade1d1843c61f46e70a3fb509e0bf045b3a0",
   "vniteVersion": "^4.0.0-beta.2",
   "author": "Honda-Cecile",
-  "stagedAt": "2026-11-17T14:10:32.143Z",
-  "gitCommit": "9865ffe",
+  "stagedAt": "2026-11-17T14:19:15.924Z",
+  "gitCommit": "c1886e3",
   "gitTagExists": true,
-  "gitDirty": false
+  "gitDirty": true
 }
