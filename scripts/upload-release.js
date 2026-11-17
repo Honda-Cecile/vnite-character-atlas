@@ -169,7 +169,12 @@ if (dryRun) {
   // ── 2. tag 必须指向那个 commit（不存在就按那个 commit 建，绝不指向主分支最新）──
   const ref = await api('GET', `/repos/${repoFull}/git/ref/tags/v${version}`)
   if (ref.status === 200) {
-    const remoteSha = ref.json?.object?.sha || ''
+    let remoteSha = ref.json?.object?.sha || ''
+    // 附注 tag（git tag -a）的 ref 指向的是 tag 对象，不是 commit，要再解一层
+    if (ref.json?.object?.type === 'tag' && remoteSha) {
+      const tagObj = await api('GET', `/repos/${repoFull}/git/tags/${remoteSha}`)
+      if (tagObj.status === 200) remoteSha = tagObj.json?.object?.sha || remoteSha
+    }
     if (remoteSha && remoteSha !== fullSha) {
       die(
         `远端 tag v${version} 指向 ${remoteSha.slice(0, 7)}，本地是 ${fullSha.slice(0, 7)}`,
