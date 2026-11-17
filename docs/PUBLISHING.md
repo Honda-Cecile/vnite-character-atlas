@@ -41,8 +41,13 @@ node scripts/probe-overrides.js                          # 个人修正层（离
 node scripts/probe-paths.js                              # 便携 / 安装两种数据目录判定（离线）
 node scripts/probe-traits.js                             # 标签剧透分级 + 原名参与匹配（离线）
 node scripts/probe-spoiler.js                            # 卡片/弹窗的剧透折叠开关（离线，headless Chrome）
+node scripts/probe-conflict.js                           # PouchDB 409 冲突重试（离线）
+node scripts/probe-double-activate.js                    # 重复 activate 不会重复注册 IPC（离线）
+node scripts/probe-vndb.js                               # KunGalgame 未收录时落 VNDB 兜底（联网）
 npm run pack                                             # → dist/character-atlas-<版本号>.vnpkg
 node scripts/verify-package.js                           # 包结构 / 14 项配置 / controlType / 导出符号
+node scripts/backup-source.js                            # 每个版本的源码快照 source-v<版本>.zip
+node scripts/check-releases.js                           # 目录 / 包内版本 / tag 版本 / sha256 / 源码快照 全对
 ```
 
 > 探针读的是 **`dist/index.js`**，改过 `src` 没 build 的话，探针测的仍是旧代码。
@@ -51,7 +56,8 @@ node scripts/verify-package.js                           # 包结构 / 14 项配
 - [ ] `package.json`：`id` = `character-atlas`，`name` = `Character Atlas`，`version` = 当前版本，`author` = `Honda-Cecile`，`repo` = `{owner: "Honda-Cecile", name: "vnite-character-atlas"}`
 - [ ] `LICENSE`、`README.md`、`docs/` 齐全
 - [ ] `docs/screenshots/` 里的 9 张图就位（`00-hero` … `08-settings`，清单与拍摄要求见 [`docs/screenshots/README.md`](screenshots/README.md)）
-- [ ] `npm run release` 跑过，`releases/v<版本号>/` 里有 `.vnpkg` 与冻结的 `RELEASE_NOTES.md`
+- [ ] `npm run release` 跑过，`releases/v<版本号>/` 里有 `.vnpkg`、冻结的 `RELEASE_NOTES.md`、源码快照 `source-v<版本号>.zip`
+- [ ] `npm run check:releases` 全绿
 - [ ] `docs/CHANGELOG.md` 与 `docs/RELEASE_NOTES.md` 都已写上这一版的内容
 - [ ] 在真实 Vnite 里装一遍：启用 → 重启 → 打开一部有角色的作品 → 人物标签页正常
 
