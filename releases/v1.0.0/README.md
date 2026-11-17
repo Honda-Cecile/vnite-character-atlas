@@ -9,23 +9,24 @@
 | `CHANGELOG.md` | 这一版的更新条目 |
 | `meta.json` | 版本 / 打包时间 / git commit / 大小 / sha256 |
 | `SHA256SUMS.txt` | 校验和 |
-| `1-打开发布页.url` | **最省事**：双击直接打开预填好 tag 与标题的 GitHub 新建 Release 页 |
-| `2-复制发布说明.cmd` | 双击把 `RELEASE_NOTES.md` 复制进剪贴板，网页里 Ctrl+V 即可 |
-| `upload.cmd` | **全自动**：双击上传（Windows）。可重复运行，同名附件会先删再传 |
-| `upload.ps1` | 同上，PowerShell 版 |
+| `publish.cmd` | **双击发布**：commit 不在 GitHub 上就先推 tag，再建 Release、传包、回读确认 |
+| `1-打开发布页.url` | 备选：双击打开预填好 tag 与标题的 GitHub 新建 Release 页 |
+| `2-复制发布说明.cmd` | 备选：双击把 `RELEASE_NOTES.md` 复制进剪贴板，网页里 Ctrl+V |
 
-## 一键上传
+## 双击 publish.cmd
 
-双击 `upload.cmd`。第一次用之前要做一次性的 token 配置：
+一步做完：确认 commit 在 GitHub（不在就 `git push v1.0.0`，**只推 tag，不动 main**）→ 校验包（大小 / sha256 / 包内版本）→ 建 Release（非 draft / 非 prerelease，正文取冻结的 `RELEASE_NOTES.md`）→ 上传附件（同名先删再传）→ 回读确认并打印下载地址。
 
-1. GitHub → Settings → Developer settings → Personal access tokens
-   - classic：勾 `repo`
-   - fine-grained：勾 **Contents: Read and write**
-2. 在仓库根建目录 `.secrets`，里面放一个纯文本文件 `github-token`，内容是 token（这个目录在 `.gitignore` 里，不会被提交）
-3. 双击 `upload.cmd`
+可重复运行，不想要正式发布就先演练：
 
-脚本会自己：确认 commit 已在 GitHub → tag 不存在就按这个版本的 commit 创建（**不会**指向主分支最新）→ 建 Release（非 draft / 非 prerelease）→ 上传附件 → 回读确认。想先演练就运行 `node scripts/upload-release.js --version=1.0.0 --dry-run`。
+```
+publish.cmd --dry-run     只打印会做什么，不联网改任何东西
+publish.cmd --no-push     不推 tag，只上传（tag 已在远端时用）
+publish.cmd --main        顺手把 main 也推上去（默认不推）
+```
 
-## 手动上传（不想写 token）
+token 用一次就够了（仓库根的 `set-token.cmd` 会读剪贴板写入 `.secrets/github-token` 并验证写权限）。
+
+## 手动发（不想用脚本）
 
 GitHub → Releases → Draft a new release → **Choose a tag** 选已存在的 `v1.0.0`（**不要**新建 tag）→ 正文粘贴 `RELEASE_NOTES.md` → 附件选 `character-atlas-1.0.0.vnpkg` → 不要勾 prerelease、不要存 draft。

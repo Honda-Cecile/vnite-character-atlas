@@ -200,6 +200,7 @@
     "stage": "node scripts/stage-release.js",
     "check:releases": "node scripts/check-releases.js",
     "upload": "node scripts/upload-release.js",
+    "publish": "node scripts/publish.js",
     "release": "npm run pack && node scripts/stage-release.js",
     "clean": "rimraf dist",
     "prepack": "npm run build"

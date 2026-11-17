@@ -30,7 +30,7 @@
 - 新增三个离线探针：`probe-traits.js`（标签档位与原名匹配）、`probe-spoiler.js`（剧透折叠的 DOM 行为）、`probe-auth.js`（401 降级与配置热重读）。
 - 回归探针适配 `schemaVersion` 2 与动态版本号。
 
-安装包：[`character-atlas-1.1.0.vnpkg`](./v1.1.0/character-atlas-1.1.0.vnpkg) · 打包日期 2026-11-17 14:43:17 · 138.1 KB
+安装包：[`character-atlas-1.1.0.vnpkg`](./v1.1.0/character-atlas-1.1.0.vnpkg) · 打包日期 2026-11-17 14:47:22 · 138.1 KB
 
 ## 1.0.0 · 2026-11-17
 
@@ -43,4 +43,4 @@
 - 数据搬家：导出 / 导入（数据 + 个人修正 + 图片），图片存进数据库目录，随官方「备份数据库」一起走。
 - 14 项可配置项；界面滚动条统一隐藏，视觉与 Vnite 原生一致。
 
-安装包：[`character-atlas-1.0.0.vnpkg`](./v1.0.0/character-atlas-1.0.0.vnpkg) · 打包日期 2026-11-17 14:26:19 · 134.58 KB
+安装包：[`character-atlas-1.0.0.vnpkg`](./v1.0.0/character-atlas-1.0.0.vnpkg) · 打包日期 2026-11-17 14:47:21 · 134.58 KB

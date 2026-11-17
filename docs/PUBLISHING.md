@@ -139,13 +139,17 @@ git push origin v1.1.0
 
 ### 3.3 双击上传（脚本，全自动）
 
-`releases/v<版本号>/` 里带了 `upload.cmd`（双击）和 `upload.ps1`，也可以命令行跑：
+`releases/v<版本号>/` 里带了 `publish.cmd`（双击即发），仓库根也有一个（发 `package.json` 里的版本）。命令行等价于：
 
 ```bash
-npm run upload                                        # 当前版本
-node scripts/upload-release.js --version=1.1.0        # 指定版本
-node scripts/upload-release.js --version=1.1.0 --dry-run   # 只检查不联网
+npm run publish                                  # 当前版本：推 tag（需要时）+ 建 Release + 传包
+node scripts/publish.js --version=1.1.0           # 指定版本
+node scripts/publish.js --version=1.1.0 --dry-run # 只演练，不改任何远端状态
+node scripts/publish.js --no-push                 # tag 已在远端时，只上传
+node scripts/publish.js --main                    # 顺手把 main 也推上去
 ```
+
+底层的 `scripts/upload-release.js`（只做上传，不推代码）和 `npm run upload` 仍然保留，调试时更可控。
 
 一次性配置 token（只需要做一次）：
 

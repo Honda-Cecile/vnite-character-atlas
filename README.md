@@ -379,7 +379,7 @@ npm run release            # = build + pack + 归档
 2. 归档到 `releases/v<版本号>/`：安装包 + 冻结的 `RELEASE_NOTES.md` + 该版本 `CHANGELOG.md` + `meta.json`（版本、打包时间、git commit、大小、sha256）+ `SHA256SUMS.txt`
 3. 刷新 `releases/CHANGELOG.md`（累积索引，新版本在上），并把整份产物镜像到仓库外的 `../character-atlas-releases-backup/`
 
-发布时只要进 `releases/v<版本号>/` 拿 `.vnpkg` 和 `RELEASE_NOTES.md` 即可；更省事的是**直接双击那个目录里的 `upload.cmd`** —— 脚本会自己确认 commit 已在 GitHub、按这个版本的 commit 建 tag（不会指向主分支最新）、建 Release、上传附件、回读校验。可重复运行，同名附件先删再传。
+发布时只要进 `releases/v<版本号>/` 拿 `.vnpkg` 和 `RELEASE_NOTES.md` 即可；更省事的是**直接双击那个目录里的 `publish.cmd`**（或仓库根的 `publish.cmd`，发 `package.json` 里的版本）—— 一条链路做完：确认 commit 在 GitHub（不在就先推这一版的 tag，**只推 tag、不动 main**）→ 校验包（大小 / sha256 / 包内版本）→ 按 tag 建 Release（非 draft / 非 prerelease）→ 上传附件 → 回读确认。可重复运行，同名附件先删再传；`--dry-run` 只演练，`--no-push` 只上传，`--main` 顺手推主分支。
 
 ```bash
 npm run upload                            # 发布当前版本
