@@ -156,7 +156,7 @@ if (dryRun) {
 // ── 1. commit 必须已经在远端 ──────────────────────────────────────────────
 ;(async () => {
   let check = await api('GET', `/repos/${repoFull}/commits/${fullSha}`)
-  if (check.status === 404) {
+  if (check.status === 404 || check.status === 422) {
     die(
       `GitHub 上找不到 commit ${fullSha.slice(0, 7)}`,
       `先把代码推上去：git push origin main（tag 会一起被推，或单独 git push origin v${version}）`

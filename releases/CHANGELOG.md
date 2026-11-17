@@ -30,7 +30,7 @@
 - 新增三个离线探针：`probe-traits.js`（标签档位与原名匹配）、`probe-spoiler.js`（剧透折叠的 DOM 行为）、`probe-auth.js`（401 降级与配置热重读）。
 - 回归探针适配 `schemaVersion` 2 与动态版本号。
 
-安装包：[`character-atlas-1.1.0.vnpkg`](./v1.1.0/character-atlas-1.1.0.vnpkg) · 打包日期 2026-11-17 14:26:19 · 138.1 KB
+安装包：[`character-atlas-1.1.0.vnpkg`](./v1.1.0/character-atlas-1.1.0.vnpkg) · 打包日期 2026-11-17 14:43:17 · 138.1 KB
 
 ## 1.0.0 · 2026-11-17
 

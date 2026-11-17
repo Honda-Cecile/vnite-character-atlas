@@ -229,32 +229,32 @@ fs.writeFileSync(path.join(target, 'SHA256SUMS.txt'), `${digest}  ${fileName}\n`
 // ── 3.5 每个版本目录里放一份「一键上传」脚本与说明，双击即可发布 ─────────────
 const uploadCmd = `@echo off
 chcp 65001 >nul
-rem 双击这个文件，把 ${version} 发布到 GitHub Release。可以重复运行（同名附件会先删再传）。
+rem Publish ${version} to GitHub Releases. Safe to re-run: the same asset name is replaced.
 cd /d "%~dp0..\\.."
 node scripts\\upload-release.js --version=${version}
 if errorlevel 1 (
   echo.
-  echo [失败] 原因见上面几行。常见原因：没有 token、GitHub 上还没有这个 commit。
+  echo [FAILED] see the lines above. Usually: no token yet, or the commit is not on GitHub.
 ) else (
   echo.
-  echo [完成] 去 GitHub 的 Releases 页面确认一下。
+  echo [OK] check the Releases page on GitHub.
 )
 echo.
 pause >nul
 `
 
-const uploadPs1 = `# 双击或用 PowerShell 运行：把 ${version} 发布到 GitHub Release。可重复运行。
+const uploadPs1 = `# Publish ${version} to GitHub Releases. Safe to re-run.
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location (Resolve-Path (Join-Path $here '..\\..'))
 node scripts/upload-release.js --version=${version}
 if ($LASTEXITCODE -ne 0) {
   Write-Host ""
-  Write-Host "[失败] 原因见上面几行。" -ForegroundColor Red
+  Write-Host "[FAILED] see the lines above." -ForegroundColor Red
 } else {
   Write-Host ""
-  Write-Host "[完成] 去 GitHub 的 Releases 页面确认一下。" -ForegroundColor Green
+  Write-Host "[OK] check the Releases page on GitHub." -ForegroundColor Green
 }
-Read-Host "按回车关闭" | Out-Null
+Read-Host "Press Enter to close" | Out-Null
 `
 
 const versionReadme = `# ${version}
@@ -308,17 +308,27 @@ fs.writeFileSync(
 var copyNotesCmd = [
   '@echo off',
   'chcp 65001 >nul',
-  'rem 把这一版的发布说明复制进剪贴板，网页里 Ctrl+V 粘贴到正文即可。',
-  "powershell -NoProfile -Command \"Get-Content -Raw -Encoding UTF8 '%~dp0RELEASE_NOTES.md' | Set-Clipboard\"",
+  'rem Copy this release\'s notes to the clipboard, then paste them into the GitHub release body.',
+  'powershell -NoProfile -Command "try { Get-Content -Raw -Encoding UTF8 \'%~dp0RELEASE_NOTES.md\' | Set-Clipboard -ErrorAction Stop; exit 0 } catch { exit 1 }"',
   'if errorlevel 1 (',
-  '  echo [失败] 没读到 RELEASE_NOTES.md',
+  '  echo [WARN] clipboard is busy - opening the notes in Notepad, select all and copy from there.',
+  '  notepad "%~dp0RELEASE_NOTES.md"',
   ') else (',
-  '  echo [完成] 发布说明已复制到剪贴板，去网页里粘贴。',
+  '  echo [OK] notes are in the clipboard - paste them in the browser.',
   ')',
   'echo.',
   'pause >nul',
   ''
 ].join('\n')
+
+// cmd.exe 会在 chcp 65001 之后按字节读文件，多字节内容会让行错位（实测 rem 行被截断成命令）。
+// 所以 .cmd / .ps1 一律只写 ASCII，中文说明留在 README 里。
+for (var badFile of ['upload.cmd', 'upload.ps1', '2-复制发布说明.cmd']) {
+  var text = badFile === 'upload.cmd' ? uploadCmd : badFile === 'upload.ps1' ? uploadPs1 : copyNotesCmd
+  if (/[^\x00-\x7F]/.test(text.replace(/2-复制发布说明\.cmd/g, ''))) {
+    throw new Error(badFile + ' 里出现非 ASCII 字符，cmd/PowerShell 会解析错乱')
+  }
+}
 fs.writeFileSync(path.join(target, '2-复制发布说明.cmd'), copyNotesCmd.replace(/\n/g, '\r\n'), 'utf8')
 fs.writeFileSync(path.join(target, 'README.md'), versionReadme, 'utf8')
 
