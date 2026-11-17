@@ -346,21 +346,6 @@ src/
 
 ---
 
-## 发布到 GitHub
-
-Vnite 没有人工审核的插件商店：它的「浏览」页就是拿 GitHub 的仓库搜索当注册表。所以「发布成 Vnite 插件」= **一个带 topic 的 GitHub 仓库 + 一个挂 `.vnpkg` 的 Release**。
-
-完整分步教程（含命令、checklist、排查表）：[`docs/PUBLISHING.md`](docs/PUBLISHING.md)
-
-最短路径：
-
-1. 仓库名 `vnite-character-atlas`，`package.json` 必须在仓库根
-2. 仓库 Topics 打上 **`vnite-plugin`**（分类再加 `common`）
-3. Release 打 tag `v1.0.0`，附件上传 `dist/character-atlas-1.0.0.vnpkg`，**不要勾 prerelease / 不要存草稿**
-4. Vnite → 插件 → 浏览 → 刷新，就能搜到；作者显示的是仓库 owner（`Honda-Cecile`）
-
----
-
 ## 致谢与许可
 
 - 数据来自 [KunMoe](https://github.com/KunMoe/kun-galgame-infra) 的 NextMoe Public API v2，请遵守其[使用条款与限流](https://developer.nextmoe.dev)
