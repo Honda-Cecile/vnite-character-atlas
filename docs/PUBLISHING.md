@@ -220,7 +220,53 @@ git push && git push --tags
 
 ---
 
-## 7. 常见问题
+## 7. 仓库已经超前、要发的是旧版本怎么办
+
+这很常见：本地已经把 1.2.0 写完并提交了，但你还想先把 1.1.0 发出去。**能发，只要三件事分清**。
+
+### 三个东西各自独立
+
+| 东西 | 存在哪 | 谁改它 |
+| --- | --- | --- |
+| `main` 分支的源码 | 仓库默认分支 | `git push origin main` |
+| tag `v1.1.0` | 指向 1.1.0 **那个 commit**，与 main 的当前位置无关 | `git push origin v1.1.0` |
+| Release 附件 | 你手动上传的 `.vnpkg` 文件，push 不会覆盖它 | 网页上传 |
+
+所以「push 了 1.2.0 的 main」**不会**把 1.1.0 的附件改掉，也不会动 v1.1.0 这个 tag。GitHub 上「最新 Release 落后于 main」是常态。
+
+### 唯一的坑：建 Release 时别用「新建 tag」
+
+GitHub 建 Release 时默认会让你「新建 tag」，它会把 tag 打在**默认分支的最新 commit**（也就是 1.2.0）上。这样 tag 指向 1.2.0 的代码，附件却是 1.1.0 的包 —— 这才是真的串味。
+
+正确做法：
+
+1. 先确认 tag 已经在本地建好、且指向 1.1.0 的 commit：`git tag -l` + 看 `releases/v1.1.0/meta.json` 里的 `gitCommit`。
+2. `git push origin v1.1.0`（哪怕 main 已经是 1.2.0，推这个 tag 只会推它指向的那个 commit）。
+3. 网页建 Release → **Choose a tag** 里选已存在的 `v1.1.0` → 附件取 `releases/v1.1.0/character-atlas-1.1.0.vnpkg`。
+
+### 上传前跑一次审计
+
+```bash
+npm run check:releases
+```
+
+它逐版本核对：目录名 = 包内 `manifest.version` = `meta.json` 版本 = tag 里的 `package.json` 版本 = sha256。任何一处对不上就报 ✗ 并给出原因（比如「tag v1.1.0 指向的 commit 里 package.json 是 1.2.0」）。发布前跑一遍，比自己盯文件靠谱。
+
+### 一个可以避免全部麻烦的习惯
+
+如果预计 1.1.0 要过几天才发，而 1.2.0 已经在写了，就**别在 main 上堆**：
+
+```bash
+git switch -c 1.2.0-dev     # 新版本放分支上，main 停在待发布的 1.1.0
+```
+
+等 1.1.0 发完，`git switch main && git merge 1.2.0-dev`，再发 1.2.0。main 始终等于「最新已发布版本」，Vnite 读到的根目录 `package.json` 也就永远和最新 Release 对得上。
+
+（附带说明：Vnite 的插件卡片会读**默认分支根目录**的 `package.json` 来填名字/描述/`vniteVersion`，版本号则取最新 Release 的 tag。所以 1.2.0 里如果改了 `id`、`name` 或 `vniteVersion`，而 1.1.0 的包还是旧的，卡片信息就会新旧混着显示。不想混就先发 1.1.0，再推 1.2.0。）
+
+---
+
+## 8. 常见问题
 
 **能让别人不装 Node 就用吗？**
 `.vnpkg` 已经是打包好的单文件 `dist/index.js`，用户只需要在 Vnite 里「安装插件」选文件，不需要 Node 和 npm。

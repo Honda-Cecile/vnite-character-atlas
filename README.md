@@ -361,6 +361,7 @@ npm run typecheck    # tsc --noEmit
 | `node scripts/preview-settings.js` | 离线渲染设置页 mock（`.tmp/native/preview-settings.png`），核对注入行的外观 |
 | `node scripts/preview-scrollbars.js` | 离线核对面板 / 弹窗 / 文本框都没有可见滚动条 |
 | `node scripts/stage-release.js` | 把一个版本归档进 `releases/<版本号>/`（见下节） |
+| `node scripts/check-releases.js` | 发布前审计：目录名 / 包内版本 / tag / sha256 是否一一对上 |
 
 ### 发版与产物归档
 
