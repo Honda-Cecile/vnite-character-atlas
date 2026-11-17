@@ -4,13 +4,13 @@
   "version": "1.1.0",
   "tag": "v1.1.0",
   "fileName": "character-atlas-1.1.0.vnpkg",
-  "bytes": 140515,
-  "sizeKB": 137.22,
-  "sha256": "4a005e00ab165727a8e7358cc0f473ee4aeb9a9dedfda652bfe4da099aa30db3",
+  "bytes": 141412,
+  "sizeKB": 138.1,
+  "sha256": "700a4c990daf2d3d6b7e61b1733fade1d1843c61f46e70a3fb509e0bf045b3a0",
   "vniteVersion": "^4.0.0-beta.2",
   "author": "Honda-Cecile",
-  "stagedAt": "2026-11-17T14:10:20.874Z",
-  "gitCommit": "67f00d3",
+  "stagedAt": "2026-11-17T14:10:32.143Z",
+  "gitCommit": "9865ffe",
   "gitTagExists": true,
   "gitDirty": false
 }

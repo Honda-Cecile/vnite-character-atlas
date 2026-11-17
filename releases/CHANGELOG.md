@@ -5,7 +5,7 @@
 
 | 版本 | 打包日期 | 安装包 | 大小 | sha256 |
 | --- | --- | --- | --- | --- |
-| [1.1.0](./v1.1.0/) | 2026-11-17 | [character-atlas-1.1.0.vnpkg](./v1.1.0/character-atlas-1.1.0.vnpkg) | 137.22 KB | `4a005e00ab16…` |
+| [1.1.0](./v1.1.0/) | 2026-11-17 | [character-atlas-1.1.0.vnpkg](./v1.1.0/character-atlas-1.1.0.vnpkg) | 138.1 KB | `700a4c990daf…` |
 | [1.0.0](./v1.0.0/) | 2026-11-17 | [character-atlas-1.0.0.vnpkg](./v1.0.0/character-atlas-1.0.0.vnpkg) | 134.58 KB | `88bc6270e052…` |
 
 ## 1.1.0 · 2026-11-17
@@ -30,7 +30,7 @@
 - 新增三个离线探针：`probe-traits.js`（标签档位与原名匹配）、`probe-spoiler.js`（剧透折叠的 DOM 行为）、`probe-auth.js`（401 降级与配置热重读）。
 - 回归探针适配 `schemaVersion` 2 与动态版本号。
 
-安装包：[`character-atlas-1.1.0.vnpkg`](./v1.1.0/character-atlas-1.1.0.vnpkg) · 打包日期 2026-11-17 14:10:20 · 137.22 KB
+安装包：[`character-atlas-1.1.0.vnpkg`](./v1.1.0/character-atlas-1.1.0.vnpkg) · 打包日期 2026-11-17 14:10:32 · 138.1 KB
 
 ## 1.0.0 · 2026-11-17
 
