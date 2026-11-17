@@ -126,7 +126,18 @@ git push origin v1.1.0
 
 如果 Actions 报 `npm ci` 失败：本地 `package-lock.json` 没提交，或 Node 版本不匹配。锁定 `node-version: 20` 已写在 workflow 里。
 
-### 3.2 双击上传（脚本，最省事）
+### 3.2 双击两个文件（零配置，最省事）
+
+`releases/v<版本号>/` 里躺着这两个：
+
+1. **`1-打开发布页.url`** —— 双击，用默认浏览器打开**已经预填好** `tag=v<版本号>` 和标题的新建 Release 页。
+2. **`2-复制发布说明.cmd`** —— 双击，把这一版冻结的 `RELEASE_NOTES.md` 塞进剪贴板，网页正文里 `Ctrl+V`。
+
+然后把 `character-atlas-<版本号>.vnpkg` 从资源管理器**拖进**网页的 *Attach binaries* 区域，点 **Publish release**。全程不碰命令行、不配 token、不碰 git。
+
+两个注意：**Choose a tag 一定是已存在的那个**（别选 "Create new tag on publish"，那会打在 main 最新 commit 上）；**不要勾 pre-release / draft**，勾了 Vnite 就看不到这一版。
+
+### 3.3 双击上传（脚本，全自动）
 
 `releases/v<版本号>/` 里带了 `upload.cmd`（双击）和 `upload.ps1`，也可以命令行跑：
 
@@ -143,11 +154,13 @@ node scripts/upload-release.js --version=1.1.0 --dry-run   # 只检查不联网
    - **fine-grained**：仓库选 `vnite-character-atlas`，权限勾 **Contents: Read and write**
 2. 在仓库根建目录 `.secrets`，放一个纯文本文件 `github-token`，内容是 token（`.secrets/` 已被 `.gitignore` 排除）
 
+更省事：**复制 token → 双击仓库根的 `set-token.cmd`**。它读剪贴板、写进 `.secrets/github-token`，并当场用 `GET /repos/{repo}` + `GET /user` 验证身份与写权限，失败会直接说清是「token 无效」还是「没有 Contents 写权限」。
+
 脚本按顺序做：校验 `releases/v<版本号>/` 里的包（大小 + sha256 + 包内 manifest 版本）→ 确认这个版本的 commit 已在 GitHub → tag `v<版本号>` 不存在就**按该 commit** 创建（这一步专治「tag 打在 main 最新 commit 上」）→ 建 Release（非 draft / 非 prerelease，正文用冻结的 `RELEASE_NOTES.md`）→ 上传 `.vnpkg`（同名附件先删再传，可重复运行）→ 回读确认并打印下载地址。
 
 它的好处是**完全不依赖 git push**：只要 `api.github.com` 通（很多时候 `github.com` 被墙但 API 是通的），就能发布；前提是那个 commit 已经在远端仓库里。
 
-### 3.3 手动发（Actions 和脚本都不用）
+### 3.4 手动发（网页点，和 3.2 一样但更啰嗦）
 
 **Releases → Draft a new release**：
 

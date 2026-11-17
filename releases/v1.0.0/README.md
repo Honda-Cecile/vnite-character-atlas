@@ -9,7 +9,9 @@
 | `CHANGELOG.md` | 这一版的更新条目 |
 | `meta.json` | 版本 / 打包时间 / git commit / 大小 / sha256 |
 | `SHA256SUMS.txt` | 校验和 |
-| `upload.cmd` | **双击就能上传**（Windows）。可重复运行，同名附件会先删再传 |
+| `1-打开发布页.url` | **最省事**：双击直接打开预填好 tag 与标题的 GitHub 新建 Release 页 |
+| `2-复制发布说明.cmd` | 双击把 `RELEASE_NOTES.md` 复制进剪贴板，网页里 Ctrl+V 即可 |
+| `upload.cmd` | **全自动**：双击上传（Windows）。可重复运行，同名附件会先删再传 |
 | `upload.ps1` | 同上，PowerShell 版 |
 
 ## 一键上传
