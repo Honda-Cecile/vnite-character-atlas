@@ -41,17 +41,18 @@ node scripts/probe-overrides.js                          # 个人修正层（离
 node scripts/probe-paths.js                              # 便携 / 安装两种数据目录判定（离线）
 node scripts/probe-traits.js                             # 标签剧透分级 + 原名参与匹配（离线）
 node scripts/probe-spoiler.js                            # 卡片/弹窗的剧透折叠开关（离线，headless Chrome）
-npm run pack                                             # → dist/character-atlas-1.0.0.vnpkg
+npm run pack                                             # → dist/character-atlas-<版本号>.vnpkg
 node scripts/verify-package.js                           # 包结构 / 14 项配置 / controlType / 导出符号
 ```
 
 > 探针读的是 **`dist/index.js`**，改过 `src` 没 build 的话，探针测的仍是旧代码。
 
 - [ ] 上面全部通过
-- [ ] `package.json`：`id` = `character-atlas`，`name` = `Character Atlas`，`version` = `1.0.0`，`author` = `Honda-Cecile`，`repo` = `{owner: "Honda-Cecile", name: "vnite-character-atlas"}`
+- [ ] `package.json`：`id` = `character-atlas`，`name` = `Character Atlas`，`version` = 当前版本，`author` = `Honda-Cecile`，`repo` = `{owner: "Honda-Cecile", name: "vnite-character-atlas"}`
 - [ ] `LICENSE`、`README.md`、`docs/` 齐全
 - [ ] `docs/screenshots/` 里的 9 张图就位（`00-hero` … `08-settings`，清单与拍摄要求见 [`docs/screenshots/README.md`](screenshots/README.md)）
-- [ ] `dist/character-atlas-1.0.0.vnpkg` 已生成
+- [ ] `npm run release` 跑过，`releases/v<版本号>/` 里有 `.vnpkg` 与冻结的 `RELEASE_NOTES.md`
+- [ ] `docs/CHANGELOG.md` 与 `docs/RELEASE_NOTES.md` 都已写上这一版的内容
 - [ ] 在真实 Vnite 里装一遍：启用 → 重启 → 打开一部有角色的作品 → 人物标签页正常
 
 ---
@@ -111,15 +112,17 @@ galgame visual-novel character kungal nextmoe vndb scraper electron typescript
 ## 3. 打 tag + 发 Release
 
 ```bash
-git tag -a v1.0.0 -m "1.0.0"
-git push origin v1.0.0
+# 假设当前版本是 1.1.0（换成你的）
+git tag -a v1.1.0 -m "1.1.0"
+git push origin main
+git push origin v1.1.0
 ```
 
 ### 3.1 有 GitHub Actions（推荐）
 
 仓库里已经带了 `.github/workflows/release.yml`：推 `v*` tag 时自动跑 typecheck → build → pack → verify → 建 Release 并挂上 `.vnpkg`，Release 正文读 `docs/RELEASE_NOTES.md`。
 
-推完 tag 去 **Actions** 看 `release` 这次运行；成功后 **Releases** 里就有 `v1.0.0` 和附件 `character-atlas-1.0.0.vnpkg`。
+推完 tag 去 **Actions** 看 `release` 这次运行；成功后 **Releases** 里就有 `v<版本号>` 和附件 `character-atlas-<版本号>.vnpkg`。
 
 如果 Actions 报 `npm ci` 失败：本地 `package-lock.json` 没提交，或 Node 版本不匹配。锁定 `node-version: 20` 已写在 workflow 里。
 
@@ -127,10 +130,10 @@ git push origin v1.0.0
 
 **Releases → Draft a new release**：
 
-- **Choose a tag**：`v1.0.0`（已推送则直接选）
-- **Release title**：`1.0.0 · Character Atlas`
-- **Describe**：粘贴 `docs/RELEASE_NOTES.md` 全文
-- **Attach binaries**：上传 `dist/character-atlas-1.0.0.vnpkg`
+- **Choose a tag**：`v<版本号>`（已推送则直接选）
+- **Release title**：`<版本号> · Character Atlas`
+- **Describe**：粘贴 `releases/v<版本号>/RELEASE_NOTES.md` 全文（这份已冻结，比看当前 `docs/` 更准）
+- **Attach binaries**：上传 `releases/v<版本号>/character-atlas-<版本号>.vnpkg`
 - **不要**勾 *Set as a pre-release*（预发布不会出现在更新检查里），**不要**存成 draft
 
 发布后自己验证一下：
@@ -140,7 +143,7 @@ curl -s https://api.github.com/repos/Honda-Cecile/vnite-character-atlas/releases
   | grep -E '"tag_name"|browser_download_url'
 ```
 
-能同时看到 `v1.0.0` 和 `.vnpkg` 的下载地址就算成了。
+能同时看到 `v<版本号>` 和 `.vnpkg` 的下载地址就算成了。
 
 ---
 
@@ -168,13 +171,42 @@ curl -s https://api.github.com/repos/Honda-Cecile/vnite-character-atlas/releases
 ## 5. 发布后检查
 
 - [ ] 干净目录里再 `git clone` 一次，确认 `npm install && npm run build && npm run pack` 能跑通
-- [ ] 从 Release 下载 `.vnpkg`，在 Vnite 里装一遍，插件商店里显示的版本是 1.0.0、作者是 Honda-Cecile
+- [ ] 从 Release 下载 `.vnpkg`，在 Vnite 里装一遍，插件商店里显示的版本是这次的版本号、作者是 Honda-Cecile
 - [ ] 打开一部作品 → 人物标签页出现 → 刮削 → 右键编辑 → 导出 → 清空 → 导入，全链路走一遍
 - [ ] 把仓库地址回填到 `package.json` 的 `homepage`（可选，插件详情页会好看些）
 
 ---
 
 ## 6. 以后怎么升版本
+
+正常流程（每个版本都这么走，产物自动隔离归档）：
+
+```bash
+npm version patch                       # 1.1.0 → 1.1.1；加功能用 minor，不兼容才动 major
+# 改写 docs/CHANGELOG.md 顶部新增的这一版条目 + 重写 docs/RELEASE_NOTES.md（这版的 Release 正文）
+npm run release                         # build → pack → 归档到 releases/v<版本号>/ → 刷新索引 → 镜像备份
+git add -A && git commit -m "release: v<版本号>" && git tag -a v<版本号> -m "v<版本号>"
+git push origin main && git push origin v<版本号>
+```
+
+`npm run release` 之后你会拿到：
+
+```
+releases/v1.1.1/
+  character-atlas-1.1.1.vnpkg     ← 上传到 GitHub Release 附件
+  RELEASE_NOTES.md                ← Release 正文（已冻结，不会跟着源码变）
+  CHANGELOG.md                    ← 这一版的条目
+  meta.json                       ← 版本 / 打包时间 / git commit / 大小 / sha256
+  SHA256SUMS.txt
+releases/CHANGELOG.md             ← 累积索引（新版本在上，带下载链接）
+```
+
+- 每个版本一个目录，**互不覆盖**；同版本重跑只刷新自己那个目录。
+- 整份产物同时镜像到仓库外 `../character-atlas-releases-backup/`，防止仓库目录被误删。
+- `releases/**/*.vnpkg` 在 `.gitignore` 里开了例外，会随仓库一起进 GitHub —— 推上去就是异地备份。
+- 想立刻发布但网络不通：产物已在 `releases/` 里放着，等网络好了再上传，不影响源码提交。
+- 补归档历史版本：`node scripts/stage-release.js --version=1.0.0`（发布说明从对应 git tag 里取）。
+
 
 ```bash
 npm version patch   # 1.0.0 → 1.0.1（修 bug）

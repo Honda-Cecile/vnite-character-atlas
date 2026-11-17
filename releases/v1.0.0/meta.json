@@ -1,0 +1,16 @@
+{
+  "id": "character-atlas",
+  "name": "Character Atlas",
+  "version": "1.0.0",
+  "tag": "v1.0.0",
+  "fileName": "character-atlas-1.0.0.vnpkg",
+  "bytes": 137815,
+  "sizeKB": 134.58,
+  "sha256": "88bc6270e052a82f0a7ee6101c748a3eeeb057d30ba59396b43ca236c443aa52",
+  "vniteVersion": "^4.0.0-beta.2",
+  "author": "Honda-Cecile",
+  "stagedAt": "2026-11-17T14:09:37.128Z",
+  "gitCommit": "739674c",
+  "gitTagExists": true,
+  "gitDirty": true
+}

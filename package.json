@@ -197,6 +197,8 @@
     "build:watch": "webpack --watch",
     "typecheck": "tsc --noEmit",
     "pack": "npm run build && npx vnite-plugin-sdk pack .",
+    "stage": "node scripts/stage-release.js",
+    "release": "npm run pack && node scripts/stage-release.js",
     "clean": "rimraf dist",
     "prepack": "npm run build"
   },

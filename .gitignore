@@ -5,6 +5,9 @@ dist/
 # 打包产物（发布时上传到 GitHub Releases，不进仓库）
 *.vnpkg
 
+# 例外：releases/ 是归档目录，每个版本的安装包都要进仓库（推到 GitHub 就是异地备份）
+!releases/**/*.vnpkg
+
 # 临时文件、探针产出
 .tmp/
 *.log

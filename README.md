@@ -354,7 +354,33 @@ npm run typecheck    # tsc --noEmit
 | `node scripts/probe-dedupe.js` | 同名重复合并（真实 API） |
 | `node scripts/probe-real-panel.js` | 真实数据 + Chrome 无头截图 |
 | `node scripts/verify-package.js` | 校验 `.vnpkg`：文件、14 项配置的 `controlType`、导出符号 |
+| `node scripts/probe-traits.js` | 标签档位：`spoiler=major`、去重取最低档、`is_lie` 丢弃、原名参与匹配（离线） |
+| `node scripts/probe-spoiler.js` | 剧透折叠的 DOM 行为：卡片不含剧透标签、弹窗默认收起、展开/收起（离线） |
+| `node scripts/probe-auth.js` | API Key 失效时降级匿名访问、配置热重读（离线） |
+| `node scripts/probe-paths.js` | 图片缓存目录判定：便携 / 安装版 / 无 Electron 三种情形（离线） |
 | `node scripts/preview-settings.js` | 离线渲染设置页 mock（`.tmp/native/preview-settings.png`），核对注入行的外观 |
+| `node scripts/preview-scrollbars.js` | 离线核对面板 / 弹窗 / 文本框都没有可见滚动条 |
+| `node scripts/stage-release.js` | 把一个版本归档进 `releases/<版本号>/`（见下节） |
+
+### 发版与产物归档
+
+每个版本都归档成一个自包含目录，**互不覆盖、只增不删**，由脚本生成，不要手工往里塞文件：
+
+```bash
+npm version patch          # 或 minor / major；顺带改 package.json 里的版本号
+# 改写 docs/RELEASE_NOTES.md（这一版的发布说明）与 docs/CHANGELOG.md（累积日志）里对应的段落
+npm run release            # = build + pack + 归档
+```
+
+`npm run release` 会做三件事：
+
+1. `npm run pack` 出 `dist/character-atlas-<版本号>.vnpkg`
+2. 归档到 `releases/v<版本号>/`：安装包 + 冻结的 `RELEASE_NOTES.md` + 该版本 `CHANGELOG.md` + `meta.json`（版本、打包时间、git commit、大小、sha256）+ `SHA256SUMS.txt`
+3. 刷新 `releases/CHANGELOG.md`（累积索引，新版本在上），并把整份产物镜像到仓库外的 `../character-atlas-releases-backup/`
+
+发布时只要进 `releases/v<版本号>/` 拿 `.vnpkg` 和 `RELEASE_NOTES.md` 即可。`releases/` 里的安装包被 git 跟踪（`.gitignore` 里开了例外），推到 GitHub 就是异地备份；仓库外那份镜像用来兜「目录被删 / 重装系统」。
+
+补归档历史版本：`node scripts/stage-release.js --version=1.0.0`（需要 `dist/` 里还留着那个包；发布说明会从对应的 git tag 里取）。
 
 源码结构：
 
