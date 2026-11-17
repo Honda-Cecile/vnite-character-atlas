@@ -308,7 +308,7 @@ export async function scrapeVndbCharacters(
   options.log?.(`VNDB 刮削完成: ${work.title} (${vn}) → ${shown.length} 人`)
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: 'vndb',
     workId: work.id,
     workName: work.title ?? vn,

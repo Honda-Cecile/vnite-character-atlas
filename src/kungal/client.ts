@@ -31,6 +31,8 @@ export interface KungalClientOptions {
   nsfw: boolean
   /** 本地滑动窗口上限（次/分） */
   rateLimit: number
+  /** Key 被判无效（401/403）并自动降级匿名时回调一次，用于写日志提示用户 */
+  onAuthFallback?: (status: number, detail?: string) => void
 }
 
 interface ProblemBody {
@@ -52,6 +54,8 @@ function parseRetryAfter(value: string | null): number | null {
 export class KungalClient {
   private readonly timestamps: number[] = []
   private readonly limit: number
+  /** Key 被服务端判废后置位：本次运行内不再带 Authorization，等同匿名档 */
+  private dropAuth = false
 
   constructor(private readonly options: KungalClientOptions) {
     this.limit = Math.max(1, Math.min(60, Math.round(options.rateLimit) || 45))
@@ -79,7 +83,7 @@ export class KungalClient {
     await this.throttle()
 
     const headers: Record<string, string> = { Accept: 'application/json' }
-    if (this.options.apiKey) headers.Authorization = `Bearer ${this.options.apiKey}`
+    if (this.options.apiKey && !this.dropAuth) headers.Authorization = `Bearer ${this.options.apiKey}`
 
     let res: Response
     try {
@@ -99,6 +103,14 @@ export class KungalClient {
       const problem = await this.readProblem(res)
       if (res.status === 429) return this.handleRateLimit<T>(path, res, problem, attempt)
       if (res.status === 401 || res.status === 403) {
+        // Key 失效（被撤销 / 复制错 / 根本不属于 NextMoe）时不要让整个刮削直接死掉：
+        // 公共服务器的匿名档额度足够本插件使用，这里丢掉 Authorization 立刻重试一次，
+        // 并在本次运行内保持匿名，避免每个请求都白撞一次 401。
+        if (this.options.apiKey && !this.dropAuth) {
+          this.dropAuth = true
+          this.options.onAuthFallback?.(res.status, problem.detail)
+          return this.get<T>(path, attempt)
+        }
         throw new KungalError(
           `KunGalgame 鉴权失败 (${res.status})：请检查 API Key 与 catalog:read scope；也可清空 API Key 走匿名档`,
           res.status,

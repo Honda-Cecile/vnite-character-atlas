@@ -2,7 +2,7 @@
 
 **给 Vnite 的「游戏详情」加一个原生「人物」标签页 —— 角色卡片墙、全套档案、立绘大图，头像落本地，随时可改可删。**
 
-![version](https://img.shields.io/badge/version-1.0.0-blue)
+![version](https://img.shields.io/badge/version-1.1.0-blue)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Vnite%204.x-lightgrey)
 ![license](https://img.shields.io/badge/license-GPL--3.0--only-green)
 
@@ -67,6 +67,28 @@ Vnite 的元数据刮削只到「作品」这一层：封面、简介、开发�
 
 ![人物详情弹窗](docs/screenshots/03-detail.png)
 
+### 标签取全量，剧透默认收起
+
+KunGalgame 的角色标签本身分三档：`none` / `minor` / `major`。插件以前没带 `spoiler` 参数，拿到的只是服务端默认的那一档（只有 `none`），所以「重度剧透」的标签一直缺着。
+
+现在人物详情的请求固定带 `spoiler=major`，把三档全都刮下来，**每一条都记着自己属于哪一档**。展示上按 Kungal 的规矩来：
+
+- 卡片墙上的小标签：只放无剧透的（刷列表不会被剧透）
+- 详情弹窗「特征」区：默认只列无剧透的，右上角一个「显示剧透（N）」按钮，点开才把 `minor` / `major` 的展开（这几条带虚线下划线区分），再点收起
+- 同一条标签若同时以 `none` 和 `major` 出现，去重后只留 `none`；`is_lie`（上游标注的「假标签」）照旧丢弃
+
+标签数量因此比以前多出不少 —— 平均每个角色多 1~4 条，主角身上更多。缓存的 `schemaVersion` 升到 2，旧缓存（只有无剧透标签）会被判为过期，第一次打开自动重刮。
+
+### 原名也参与作品匹配
+
+Vnite 里的游戏名常是中文译名，而 KunGalgame 的搜索面只认原语言名与罗马字（`q=古河渚` 是 0 命中，`q=Furukawa` 才有）。以前插件只拿 `metadata.name` 去搜，译名没被收录就报「未收录作品」——明明原名一搜就有。
+
+现在 `metadata.name`（译名）与 `metadata.originalName`（原名）一起进候选，顺序是「译名 → 原名」，逐个查再用标题相似度挑最像的；`|`、`｜`、`/` 连接的拼接标题会先拆开分别试。日志里能看到实际试过哪些写法：
+
+```
+作品匹配成功: 天空的作法 → #4242 (search)
+```
+
 ### 点标签就是跨作品搜索
 
 详情弹窗里点任意特质（比如「双马尾」）或点声优名，直接搜索**所有已缓存作品**里符合的人物，不是只在当前作品里过滤。切到别的作品会自动清空搜索状态。
@@ -112,7 +134,7 @@ Vnite 的元数据刮削只到「作品」这一层：封面、简介、开发�
 
 ### 方式一：插件管理里装（推荐）
 
-1. 从 [Releases](../../releases) 下载 `character-atlas-1.0.0.vnpkg`
+1. 从 [Releases](../../releases) 下载 `character-atlas-1.1.0.vnpkg`
 2. Vnite → 插件 → 安装插件 → 选择这个文件
 3. 启用插件，重启 Vnite
 
@@ -274,13 +296,24 @@ Vnite 的「备份数据库」会把整个 `app/database` 打成 `vnite-database
 它是插件激活后注入的 DOM，**插件停用时不存在**（Vnite 停用插件后不加载插件代码，manifest 配置里也没有按钮类型的控件）。启用插件、重开设置对话框就会出现。
 
 **提示「没能匹配到该游戏」？**
-插件用 `vndbId` → 相关网站（vndb / dlsite 链接）→ 名字搜索 的顺序定位作品。如果这部作品在 Vnite 里只有很偏的名字（比如只有 2dfan 译名、只有英文名），名字搜索可能 0 命中。两个办法：把「原名」补成 KunGalgame 的作品名（日文原名最准）；或打开「VNDB 兜底」。
+插件用 `vndbId` → 相关网站（vndb / dlsite 链接）→ 名字搜索 的顺序定位作品；名字搜索会同时试「译名」和「原名」。如果这部作品在 Vnite 里只有很偏的名字（比如只有 2dfan 译名、英文名），两个名字都搜不到就会 0 命中。两个办法：把「原名」补成 KunGalgame 的作品名（日文原名最准）；或打开「VNDB 兜底」。
+
+**标签比 Kungal 网页上少？**
+默认只显示「无剧透」标签。详情弹窗右上角点「显示剧透（N）」就会把轻微/重度剧透的那部分一起展开（虚线下划线的几条）。卡片墙上的小标签我故意只取无剧透的，避免刷列表就被剧透。
 
 **同一个人出现两次 / 两部作品显示同一份名单？**
 同一角色在数据源里常有多条记录，插件按归一化名字合并，并在标题旁显示 `KunGalgame #<workId>` 徽章。如果同一系列的两部作品本来就共用角色，名单相似是数据事实，看徽章就能确认当前挂的是哪一部。
 
 **429 / 拉取很慢？**
 匿名额度 50 次/分。把「本地限流」调到 30–40，或去 [developer.nextmoe.dev](https://developer.nextmoe.dev) 领一个 `nmk_` 密钥填进设置，额度更高。
+
+**报「鉴权失败 (401)」，清空了 API Key 还是 401？**
+两个原因叠在一起，1.0.0 里都修掉了：
+
+- 无效的 Key 会让每个请求都白撞一次 401。现在插件遇到 401 会**立刻丢掉 Authorization 用匿名重试**，并在本次运行内保持匿名，刮削不会因此失败，只会在 `debug.log` 里留一行提示。
+- Vnite 的设置对话框保存时**只写数据库、不会重载插件**，而旧版插件只在激活时读一次配置 —— 所以清空 Key 之后内存里仍然糊着旧 Key。现在每次刮削前都会重读一遍配置（只采纳数据库里真正变化的字段），改完设置直接生效，不用重启。
+
+装的是旧版的话，清空 Key 后把插件**关掉再打开**（或重启 Vnite）同样能立刻恢复。另外确认「基础 URL」是 `https://api.nextmoe.dev/v2`（带 `/v2`）。
 
 **图片不显示？**
 确认「人物头像下载到本地」状态与网络可达 `image.kungal.iloveren.link`。图片缓存在 `app/database/character-atlas/images`，设置页「打开缓存目录」可以直接跳过去。
@@ -304,7 +337,7 @@ PluginDB 里的 `charpanel:v1:*` 与 `charpanel:v1:overrides:*`，以及数据�
 ```bash
 npm install
 npm run build        # webpack → dist/index.js（单文件，node target）
-npm run pack         # → dist/character-atlas-1.0.0.vnpkg
+npm run pack         # → dist/character-atlas-1.1.0.vnpkg
 npm run build:watch  # 边改边构建
 npm run typecheck    # tsc --noEmit
 ```

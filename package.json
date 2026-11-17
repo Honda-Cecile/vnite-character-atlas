@@ -1,7 +1,7 @@
 {
   "id": "character-atlas",
   "name": "Character Atlas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "人物图鉴：给 Vnite 的「游戏详情」注入一个原生「人物」标签页，从 KunGalgame / VNDB 抓取角色（头像、立绘、简介、三围、特质），卡片墙 + 详情弹窗 + 右键编辑，头像本地缓存",
   "author": "Honda-Cecile",
   "license": "GPL-3.0-only",

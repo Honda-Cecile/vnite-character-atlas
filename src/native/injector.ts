@@ -45,7 +45,7 @@ export interface NativeCharacter {
   introMachine?: boolean
   chips?: string[]
   /** 全部特质，按分组保留（弹窗里分栏展示） */
-  traits?: Array<{ g: string; n: string; s?: boolean }>
+  traits?: Array<{ g: string; n: string; s?: boolean; sp?: 'minor' | 'major' }>
   aliases?: string[]
   /** 结构化字段：性别/生日/身高/体重/三围/血型/登场作品数 */
   facts?: Array<{ k: string; v: string }>
@@ -260,7 +260,10 @@ export class NativeTabInjector {
         if (character.heightCm) meta.push(`${character.heightCm}cm`)
         if (character.weightKg) meta.push(`${character.weightKg}kg`)
         if (character.bloodType) meta.push(`血型 ${character.bloodType.toUpperCase()}`)
-        const safeTraits = character.traits.filter((trait) => !trait.sexual)
+        // 卡片上的小标签：只要「非性 + 无剧透」的（弹窗里可以展开剧透标签）
+        const safeTraits = character.traits.filter(
+          (trait) => !trait.sexual && (trait.spoiler ?? 'none') === 'none'
+        )
         const chips = safeTraits.slice(0, 8).map((trait) => trait.name)
         // 弹窗要「所有刮削来的信息」，这里把结构化的都带上
         const facts: Array<{ k: string; v: string }> = []
@@ -300,8 +303,14 @@ export class NativeTabInjector {
           // 卡片用 safeTraits（非性特质），弹窗要「Kungal 上看到的全部」，所以给全集并标 s
           traits: character.traits.length
             ? character.traits
-                .map((trait) => ({ g: trait.group, n: trait.name, s: trait.sexual || undefined }))
-                .slice(0, 120)
+                .map((trait) => ({
+                  g: trait.group,
+                  n: trait.name,
+                  s: trait.sexual || undefined,
+                  // 只给「有剧透」的标签打标，无剧透的不占字段（payload 小一截）
+                  sp: trait.spoiler && trait.spoiler !== 'none' ? trait.spoiler : undefined
+                }))
+                .slice(0, 200)
             : undefined,
           aliases: character.aliases.length ? character.aliases.slice(0, 10) : undefined,
           facts: facts.length ? facts : undefined,

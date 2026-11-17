@@ -4,6 +4,7 @@ const { execFileSync } = require('child_process')
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = path.join(ROOT, '.tmp', 'native')
+const pkgVersion = require('../package.json').version
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 
 const dist = require(path.join(ROOT, 'dist', 'index.js'))
@@ -116,7 +117,7 @@ const settingsBody = `<style>
 .footer{display:flex;justify-content:flex-end;gap:10px;padding-top:14px}
 </style>
 <div class="page"><h1>插件</h1>
-<div class="card"><div class="card-head"><b>character-atlas</b><span>1.0.0</span></div></div>
+<div class="card"><div class="card-head"><b>character-atlas</b><span>${pkgVersion}</span></div></div>
 <div role="dialog" class="dialog"><div class="dialog-head" style="font-weight:600;margin-bottom:8px">⚙ 配置 character-atlas</div>
 <div class="rows">
   <div class="row"><div><b>缓存有效期（小时）</b><div>过了这个时间才会在后台静默刷新一次</div></div><input type="range"></div>
@@ -229,5 +230,5 @@ check(
 )
 
 const ok = results.every((item) => item.ok)
-console.log('\n结论:', ok ? '✅ UI 行为全部通过（1.0.0）' : '❌ 有断言失败')
+console.log('\n结论:', ok ? `✅ UI 行为全部通过（${pkgVersion}）` : '❌ 有断言失败')
 process.exit(ok ? 0 : 1)

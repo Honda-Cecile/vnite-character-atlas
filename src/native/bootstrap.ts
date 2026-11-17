@@ -330,6 +330,12 @@ export function nativeBootstrap(): void {
     '.vncp-trait-hit:hover{border-color:var(--vncp-accent);color:var(--vncp-accent);transform:translateY(-1px);}',
     '.vncp-trait-hit:active{transform:none;}',
     '.vncp-trait-hit:focus-visible{outline:2px solid var(--vncp-accent);outline-offset:2px;}',
+    // 剧透标签默认折叠，点「显示剧透」才展开
+    '.vncp-trait-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}',
+    '.vncp-trait-toggle{font:inherit;font-size:.78em;line-height:1.6;padding:3px 10px;border-radius:999px;',
+    'cursor:pointer;flex:0 0 auto;color:var(--vncp-dim);border:1px solid var(--vncp-line);background:transparent;}',
+    '.vncp-trait-toggle:hover{color:var(--vncp-accent);border-color:var(--vncp-accent);}',
+    '.vncp-trait-spoil{opacity:.66;border-bottom:1px dashed currentColor;}',
     '.vncp-modal .vncp-chip{margin:0 4px 4px 0;display:inline-block;font-size:.86em;}',
     '.vncp-link{display:inline-block;margin:0 10px 6px 0;font-size:.9em;color:var(--vncp-accent);',
     'background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;',
@@ -1348,43 +1354,88 @@ export function nativeBootstrap(): void {
       dialog.appendChild(section)
     }
 
-    const traits: Array<{ g: string; n: string; s?: boolean }> = character.traits || []
+    type DialogTrait = { g?: string; n: string; s?: boolean; sp?: string }
+    const traits = (character.traits || []) as DialogTrait[]
     if (traits.length) {
-      const section = el('div', 'vncp-section')
-      section.appendChild(el('div', 'vncp-section-title', '特征（' + traits.length + '）'))
-      const groups: string[] = []
-      const bucket: Record<string, Array<{ n: string; s?: boolean }>> = {}
+      // 默认只显示「无剧透」标签；点了「显示剧透」才把 minor/major 的展开 —— 和 Kungal 一致
+      const plain: DialogTrait[] = []
+      const spoilers: DialogTrait[] = []
       for (let i = 0; i < traits.length; i++) {
-        const group = String(traits[i].g || '其他')
-        if (!bucket[group]) {
-          bucket[group] = []
-          groups.push(group)
-        }
-        // 性相关特质在 Kungal 上会单独成组（被动(性) 等），这里标「·性」而不是丢掉
-        bucket[group].push({ n: String(traits[i].n), s: traits[i].s })
+        const item = traits[i]
+        if (!item || !item.n) continue
+        if (item.sp) spoilers.push(item)
+        else plain.push(item)
       }
-      for (let i = 0; i < groups.length; i++) {
-        const line = el('div', 'vncp-trait-group')
-        const label = document.createElement('b')
-        label.textContent = groups[i]
-        line.appendChild(label)
-        const items = bucket[groups[i]]
-        for (let j = 0; j < items.length; j++) {
-          const item = items[j]
-          const chip = el('button', 'vncp-trait-hit', item.n + (item.s ? '·性' : '')) as HTMLButtonElement
-          chip.type = 'button'
-          chip.title = '只看「' + item.n + '」的角色'
-          chip.addEventListener('click', function (event) {
-            event.preventDefault()
-            event.stopPropagation()
-            closeDetail()
-            // 用标签名做全局搜索：命中所有作品里带这个标签的角色
-            setSearch(String(item.n))
-          })
-          line.appendChild(chip)
+
+      const section = el('div', 'vncp-section')
+      const head = el('div', 'vncp-trait-head')
+      head.appendChild(el('div', 'vncp-section-title', '特征（' + plain.length + '）'))
+      section.appendChild(head)
+
+      const appendGroups = function (target: HTMLElement, list: DialogTrait[], mark: boolean): void {
+        const groups: string[] = []
+        const bucket: Record<string, DialogTrait[]> = {}
+        for (let i = 0; i < list.length; i++) {
+          const group = String(list[i].g || '其他')
+          if (!bucket[group]) {
+            bucket[group] = []
+            groups.push(group)
+          }
+          bucket[group].push(list[i])
         }
-        section.appendChild(line)
+        for (let i = 0; i < groups.length; i++) {
+          const line = el('div', 'vncp-trait-group')
+          const label = document.createElement('b')
+          label.textContent = groups[i]
+          line.appendChild(label)
+          const items = bucket[groups[i]]
+          for (let j = 0; j < items.length; j++) {
+            const item = items[j]
+            // 性相关特质在 Kungal 上会单独成组（被动(性) 等），这里标「·性」而不是丢掉
+            const chip = el(
+              'button',
+              'vncp-trait-hit' + (mark ? ' vncp-trait-spoil' : ''),
+              item.n + (item.s ? '·性' : '')
+            ) as HTMLButtonElement
+            chip.type = 'button'
+            chip.title = mark ? '含剧透 · 只看「' + item.n + '」的角色' : '只看「' + item.n + '」的角色'
+            chip.addEventListener('click', function (event) {
+              event.preventDefault()
+              event.stopPropagation()
+              closeDetail()
+              // 用标签名做全局搜索：命中所有作品里带这个标签的角色
+              setSearch(String(item.n))
+            })
+            line.appendChild(chip)
+          }
+          target.appendChild(line)
+        }
       }
+
+      appendGroups(section, plain, false)
+
+      if (spoilers.length) {
+        const box = el('div', 'vncp-spoiler-box')
+        box.style.display = 'none'
+        appendGroups(box, spoilers, true)
+
+        const toggle = el('button', 'vncp-trait-toggle') as HTMLButtonElement
+        toggle.type = 'button'
+        toggle.setAttribute('data-open', '0')
+        toggle.textContent = '显示剧透（' + spoilers.length + '）'
+        toggle.title = '这些标签会透露剧情走向，默认收起；点一下展开'
+        toggle.addEventListener('click', function (event) {
+          event.preventDefault()
+          event.stopPropagation()
+          const opened = box.style.display !== 'none'
+          box.style.display = opened ? 'none' : ''
+          toggle.setAttribute('data-open', opened ? '0' : '1')
+          toggle.textContent = (opened ? '显示剧透（' : '收起剧透（') + spoilers.length + '）'
+        })
+        head.appendChild(toggle)
+        section.appendChild(box)
+      }
+
       dialog.appendChild(section)
     }
 
@@ -1739,7 +1790,7 @@ export function nativeBootstrap(): void {
 
     // 卡片上只做展示：筛选入口统一放在详情弹窗里（点开卡片才能点标签）
     const traits = ((character.traits || []) as any[]).filter(function (item) {
-      return item && item.n && !item.s
+      return item && item.n && !item.s && !item.sp
     })
     if (traits.length) {
       const chips = el('div', 'vncp-chips')

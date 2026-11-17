@@ -21,9 +21,10 @@ const logs = []
 
 function panelOf(gameId, characters) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     cachedAt: Date.now(),
     data: {
+      schemaVersion: 2,
       gameId,
       workId: '886',
       workName: '测试作品',

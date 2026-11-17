@@ -21,6 +21,17 @@ export const CHARACTER_INCLUDE =
 /** 详情刮削并发上限：配合 45 次/分本地限流，3 并发不会踩服务端阈值 */
 const ENRICH_CONCURRENCY = 3
 
+/** 标签的剧透等级：none 无剧透、minor 轻微、major 重度（NextMoe 的 spoiler 枚举） */
+export type TraitSpoiler = 'none' | 'minor' | 'major'
+
+export interface PanelTrait {
+  group: string
+  name: string
+  sexual: boolean
+  /** 缺省按 none 处理，兼容旧缓存 */
+  spoiler?: TraitSpoiler
+}
+
 export interface PanelCharacter {
   id: string
   name: string
@@ -47,7 +58,7 @@ export interface PanelCharacter {
   weightKg: number | null
   measurements: ApiMeasurements | null
   bloodType: string | null
-  traits: Array<{ group: string; name: string; sexual: boolean }>
+  traits: PanelTrait[]
   aliases: string[]
   workCount: number | null
   links: ApiCharacterLink[]
@@ -58,7 +69,11 @@ export interface PanelCharacter {
 }
 
 export interface CharacterPanelData {
-  schemaVersion: 1
+  /**
+   * 2 = 标签带剧透分级（spoiler: none/minor/major）。
+   * 缓存里 schemaVersion < 2 的数据只有「无剧透标签」，升级后会当作过期重新刮。
+   */
+  schemaVersion: 2
   /** 数据来源：KunGalgame（NextMoe）或 VNDB 兜底 */
   source: 'kungal' | 'vndb'
   workId: string
@@ -163,19 +178,39 @@ export function fromBrief(brief: ApiCharacterBrief, lang: string): PanelCharacte
   }
 }
 
-function mapTraits(traits: ApiCharacterTrait[] | undefined, lang: string): Array<{ group: string; name: string; sexual: boolean }> {
+function normalizeSpoiler(value: unknown): TraitSpoiler {
+  const text = String(value ?? 'none').toLowerCase()
+  return text === 'major' || text === 'minor' ? text : 'none'
+}
+
+const SPOILER_RANK: Record<TraitSpoiler, number> = { none: 0, minor: 1, major: 2 }
+
+/**
+ * 标签映射。
+ *
+ * 详情请求带了 `spoiler=major`，所以这里拿到的是**全量标签**，每个带自己的剧透等级；
+ * 去重时同一个「组::名」只留剧透等级最低的那条（展示层默认只放 none）。
+ * `is_lie`（VNDB 的「假标签」，用于误导）照旧丢弃 —— 它不是真实特征。
+ */
+export function mapTraits(traits: ApiCharacterTrait[] | undefined, lang: string): PanelTrait[] {
   if (!traits || traits.length === 0) return []
-  const seen = new Set<string>()
-  const result: Array<{ group: string; name: string; sexual: boolean }> = []
+  const seen = new Map<string, PanelTrait>()
+  const result: PanelTrait[] = []
   for (const trait of traits) {
     if (trait.is_lie === true) continue
     const name = pickLocalized(trait.localized, lang)?.value ?? trait.display_name ?? ''
     if (!name.trim()) continue
     const group = pickLocalized(trait.group_localized, lang)?.value ?? trait.group ?? '其他'
     const key = `${group}::${name}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    result.push({ group, name, sexual: trait.is_sexual === true })
+    const spoiler = normalizeSpoiler(trait.spoiler)
+    const existing = seen.get(key)
+    if (existing) {
+      if (SPOILER_RANK[spoiler] < SPOILER_RANK[normalizeSpoiler(existing.spoiler)]) existing.spoiler = spoiler
+      continue
+    }
+    const entry: PanelTrait = { group, name, sexual: trait.is_sexual === true, spoiler }
+    seen.set(key, entry)
+    result.push(entry)
   }
   return result
 }
@@ -260,7 +295,9 @@ export async function enrichCharacter(
   const base = fromBrief(brief, lang)
   try {
     const detail = await client.get<ApiCharacterDetail>(
-      `/catalog/characters/${encodeURIComponent(brief.id)}?include=${CHARACTER_INCLUDE}`
+      // spoiler=major：把「轻微/重度剧透」的标签也一起拿回来（默认只回 none）。
+      // 展示层默认仍只显示无剧透的，弹窗里点「显示剧透」才展开。
+      `/catalog/characters/${encodeURIComponent(brief.id)}?include=${CHARACTER_INCLUDE}&spoiler=major`
     )
     return fromDetail(detail, base, lang)
   } catch (error) {
@@ -430,7 +467,7 @@ export async function scrapeCharacters(
   const originalName = (work.display_name ?? '').trim()
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: 'kungal',
     workId: String(work.id),
     workName: name.value,

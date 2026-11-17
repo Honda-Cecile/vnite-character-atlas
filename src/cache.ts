@@ -59,6 +59,8 @@ export class CharacterCache {
   async getPanel(gameId: string, ttlHours: number): Promise<CacheLookup<CharacterPanelData> | null> {
     const entry = await kvGet<CacheEntry<CharacterPanelData> | null>(this.api, entryKey(gameId), null)
     if (!entry || !entry.data || typeof entry.cachedAt !== 'number') return null
+    // schemaVersion 1 的缓存只有「无剧透标签」，升级后按未命中处理，下次打开重新刮全量
+    if ((entry.data as { schemaVersion?: number }).schemaVersion !== 2) return null
 
     const ageMs = Date.now() - entry.cachedAt
     const ttlMs = Math.max(1, ttlHours) * 3600_000

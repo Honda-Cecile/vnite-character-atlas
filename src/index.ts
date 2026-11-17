@@ -185,7 +185,9 @@ interface GameLike {
 export class CharacterPanelService {
   private readonly api: IPluginAPI
   private config: PanelConfig
-  private readonly client: KungalClient
+  /** 上一次从数据库读到的配置：用来分辨「用户在设置页改了」和「内存里被 updateConfig 改过」 */
+  private lastDiskConfig: PanelConfig | null
+  private client: KungalClient
   private readonly cache: CharacterCache
   /** 用户右键删除 / 编辑过的角色：叠加在刮削结果之上 */
   private readonly overrides: CharacterOverrides
@@ -208,14 +210,64 @@ export class CharacterPanelService {
   constructor(api: IPluginAPI, config: PanelConfig) {
     this.api = api
     this.config = config
-    this.client = new KungalClient({
+    this.lastDiskConfig = { ...config }
+    this.client = this.buildClient(config)
+    this.cache = new CharacterCache(api)
+    this.overrides = new CharacterOverrides(api, (message, error) => this.log(message, error))
+  }
+
+  /** 按配置建请求层；Key 被判废时自动降级匿名（onAuthFallback 只提示，不中断刮削） */
+  private buildClient(config: PanelConfig): KungalClient {
+    return new KungalClient({
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
       nsfw: config.nsfw,
-      rateLimit: config.localRateLimit
+      rateLimit: config.localRateLimit,
+      onAuthFallback: (status, detail) => {
+        this.log(
+          `API Key 无效 (${status})，已自动改用匿名访问（每分 50 / 每日 10000 次，够用）` +
+            (detail ? `｜${detail}` : '') +
+            '｜想消除这条提示：到插件设置里清空 API Key'
+        )
+      }
     })
-    this.cache = new CharacterCache(api)
-    this.overrides = new CharacterOverrides(api, (message, error) => this.log(message, error))
+  }
+
+  /**
+   * 每次刮削前重读一遍配置。
+   *
+   * Vnite 的设置对话框保存时只写数据库（`syncTo('plugin', ...)`），不会重载插件，
+   * 而插件原本只在 activate 时读一次配置 —— 于是「清空 API Key 之后仍然 401」
+   * 这种假故障就出现了：内存里还糊着旧 Key。这里按需重建请求层修掉它。
+   */
+  private async reloadConfigIfChanged(): Promise<void> {
+    let disk: PanelConfig
+    try {
+      disk = await readConfig(this.api)
+    } catch (error) {
+      this.log('重读配置失败，沿用内存里的那份', error)
+      return
+    }
+
+    // 只采纳「数据库里真的变了」的字段：其它字段保持内存值，
+    // 这样 updateConfig() 这种程序内显式设定不会被一次重读打回去。
+    const merged: PanelConfig = { ...this.config }
+    const previous = this.lastDiskConfig
+    for (const key of Object.keys(disk) as Array<keyof PanelConfig>) {
+      if (!previous || disk[key] !== previous[key]) (merged as any)[key] = disk[key]
+    }
+    this.lastDiskConfig = disk
+
+    const changed =
+      merged.apiKey !== this.config.apiKey ||
+      merged.baseUrl !== this.config.baseUrl ||
+      merged.nsfw !== this.config.nsfw ||
+      merged.localRateLimit !== this.config.localRateLimit
+    this.config = merged
+    if (changed) {
+      this.client = this.buildClient(merged)
+      this.log(`配置已更新：${merged.apiKey ? 'API Key 已设置' : '匿名访问'} · ${merged.baseUrl}`)
+    }
   }
 
   private log(message: string, error?: unknown): void {
@@ -830,6 +882,7 @@ export class CharacterPanelService {
 
   /** 真正的网络刮削 + 缓存 + 元数据同步 + 面板生成 */
   private async scrapeAndStore(gameId: string): Promise<CharacterPanelData> {
+    await this.reloadConfigIfChanged()
     const identifier = await this.readIdentifier(gameId)
 
     let panel: CharacterPanelData | null = null
@@ -913,7 +966,12 @@ export class CharacterPanelService {
     }
 
     if (!work) {
-      const resolved = await resolveWorkId(this.client, identifier)
+      const resolved = await resolveWorkId(this.client, {
+        name: (identifier.name || identifier.originalName || '').trim(),
+        names: [identifier.originalName, identifier.name],
+        vndbId: identifier.vndbId,
+        relatedSites: identifier.relatedSites
+      })
       work = resolved.work.characters ? resolved.work : await getWorkWithCharacters(this.client, resolved.workId)
       await this.cache.setWorkResolution(gameId, {
         workId: resolved.workId,
@@ -1143,7 +1201,13 @@ export class CharacterPanelService {
   }
 
   updateConfig(config: PanelConfig): void {
+    const changed =
+      config.apiKey !== this.config.apiKey ||
+      config.baseUrl !== this.config.baseUrl ||
+      config.nsfw !== this.config.nsfw ||
+      config.localRateLimit !== this.config.localRateLimit
     this.config = config
+    if (changed) this.client = this.buildClient(config)
   }
 }
 
@@ -1188,4 +1252,7 @@ export default plugin
 export { NativeTabInjector }
 export { scrapeVndbCharacters, normalizeVnId } from './vndb/vndb'
 export { ImageCache } from './images'
+export { KungalClient, KungalError } from './kungal/client'
+export { resolveWorkId } from './kungal/resolve'
+export { mapTraits, scrapeCharacters } from './kungal/characters'
 export { BOOTSTRAP_SOURCE } from './native/bootstrap'

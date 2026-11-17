@@ -39,6 +39,8 @@ node scripts/probe-ui.js                                 # UI：搜索、筛选�
 node scripts/probe-edit.js                               # 右键 → 编辑 → 删除 → 重新下发
 node scripts/probe-overrides.js                          # 个人修正层（离线）
 node scripts/probe-paths.js                              # 便携 / 安装两种数据目录判定（离线）
+node scripts/probe-traits.js                             # 标签剧透分级 + 原名参与匹配（离线）
+node scripts/probe-spoiler.js                            # 卡片/弹窗的剧透折叠开关（离线，headless Chrome）
 npm run pack                                             # → dist/character-atlas-1.0.0.vnpkg
 node scripts/verify-package.js                           # 包结构 / 14 项配置 / controlType / 导出符号
 ```

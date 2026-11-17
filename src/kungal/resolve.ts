@@ -118,8 +118,13 @@ export function toRef(raw: string | null | undefined): ExternalRef | null {
 }
 
 export interface ResolveInput {
-  /** gameDoc.metadata.name */
+  /** gameDoc.metadata.name（通常是译名） */
   name?: string | null
+  /**
+   * 所有可用于搜索的标题：name / originalName，以及渲染进程从「基本信息」里读到的候选。
+   * 旧版只拿 name 去搜，译名没被收录时就直接判「未收录」，明明原名能搜到。
+   */
+  names?: Array<string | null | undefined> | null
   /** gameDoc.metadata.vndbId，可能是 'v86' 或 '86' */
   vndbId?: string | null
   /** gameDoc.metadata.relatedSites */
@@ -172,7 +177,8 @@ function refFromRelatedSites(sites: Array<{ label?: string; url?: string }> | nu
  */
 export async function resolveWorkId(client: KungalClient, input: ResolveInput): Promise<ResolvedWork> {
   const name = (input.name ?? '').trim()
-  const variants = name ? nameVariants(name) : []
+  // 多标题一起进候选：译名、原名、渲染进程读到的其它写法都算，谁先命中谁算数
+  const variants = collectVariants(name, input.names)
   let refCandidate: { work: ApiWork; matchedBy: 'vndb-id' | 'related-site'; query: string } | null = null
 
   const vndbRef = toRef(input.vndbId ?? null)
@@ -261,6 +267,28 @@ function nameVariants(name: string): string[] {
   const unique: string[] = []
   for (const value of ordered) {
     if (value.length >= 2 && unique.indexOf(value) < 0) unique.push(value)
+  }
+  return unique
+}
+
+/**
+ * 汇总所有候选标题：主标题（译名）+ 其它写法（原名 / 渲染进程读到的名字）。
+ * 顺序即搜索顺序 —— 先译名（用户在界面上看到的就是它），命中不了再退到原名。
+ */
+function collectVariants(primary: string, others: Array<string | null | undefined> | null | undefined): string[] {
+  const input: string[] = []
+  if (primary) input.push(primary)
+  if (others) {
+    for (const value of others) {
+      const text = (value ?? '').toString().trim()
+      if (text) input.push(text)
+    }
+  }
+  const unique: string[] = []
+  for (const raw of input) {
+    for (const variant of nameVariants(raw)) {
+      if (unique.indexOf(variant) < 0) unique.push(variant)
+    }
   }
   return unique
 }
