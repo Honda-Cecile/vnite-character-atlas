@@ -362,6 +362,11 @@ let mirrorLine = '已跳过外部镜像（--no-mirror）'
 if (mirror) {
   const mirrorDir = path.join(MIRROR_ROOT, dirName)
   fs.mkdirSync(mirrorDir, { recursive: true })
+  // 镜像要「同步」而不是「叠加」：先把镜像目录里这一版不该再有的文件删掉
+  // （比如上一版生成过的 upload.cmd / upload.ps1），否则备份里会留着已经下线的脚本
+  for (const stale of fs.readdirSync(mirrorDir)) {
+    if (!fs.existsSync(path.join(target, stale))) fs.rmSync(path.join(mirrorDir, stale), { force: true })
+  }
   for (const name of fs.readdirSync(target)) {
     fs.copyFileSync(path.join(target, name), path.join(mirrorDir, name))
   }
