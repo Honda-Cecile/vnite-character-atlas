@@ -138,9 +138,9 @@ releases/
     ...
 \`\`\`
 
-每个版本都带一份 **源码快照** `source-v<版本>.zip`：`.vnpkg` 里只有编译后的 `dist/index.js`，
-真要看/重建这一版得靠源码。快照由 `node scripts/backup-source.js` 生成（`npm run release` 时若已有 tag
-会自动带一份，`publish.cmd` 推完 tag 后也会补），`npm run check:releases` 会核对它的 sha256。
+每个版本都带一份 **源码快照** \`source-v<版本>.zip\`：\`.vnpkg\` 里只有编译后的 \`dist/index.js\`，
+真要看/重建这一版得靠源码。快照由 \`node scripts/backup-source.js\` 生成（\`npm run release\` 时若已有 tag
+会自动带一份，\`publish.cmd\` 推完 tag 后也会补），\`npm run check:releases\` 会核对它的 sha256。
 
 ## 发布某个版本
 

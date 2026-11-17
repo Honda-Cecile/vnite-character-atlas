@@ -361,7 +361,11 @@ npm run typecheck    # tsc --noEmit
 | `node scripts/preview-settings.js` | 离线渲染设置页 mock（`.tmp/native/preview-settings.png`），核对注入行的外观 |
 | `node scripts/preview-scrollbars.js` | 离线核对面板 / 弹窗 / 文本框都没有可见滚动条 |
 | `node scripts/stage-release.js` | 把一个版本归档进 `releases/<版本号>/`（见下节） |
-| `node scripts/check-releases.js` | 发布前审计：目录名 / 包内版本 / tag / sha256 是否一一对上 |
+| `node scripts/backup-source.js` | 给每个版本补一份源码快照 `source-v<版本>.zip`（`git archive` 出来的 tag 树） |
+| `node scripts/publish.js` | 一条链路发布：需要时先推 tag → 建 Release → 传包 → 回读确认（`--dry-run` 演练） |
+| `node scripts/probe-conflict.js` | PluginDB 并发读写的 409 冲突重试（离线） |
+| `node scripts/probe-double-activate.js` | `activate()` 重复调用的幂等性，不重复注册 IPC（离线） |
+| `node scripts/check-releases.js` | 发布前审计：目录名 / 包内版本 / tag / sha256 / 源码快照是否一一对上 |
 
 ### 发版与产物归档
 
