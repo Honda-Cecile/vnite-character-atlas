@@ -6,3 +6,4 @@
 
 # 安装包是二进制，别做任何换行转换
 *.vnpkg binary
+*.url text eol=crlf

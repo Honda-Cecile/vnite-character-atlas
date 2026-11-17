@@ -32,7 +32,8 @@ if (!token) {
   console.error('\n✗ 剪贴板是空的（或者读不到）。先把 token 复制下来，再运行一次。\n')
   process.exit(1)
 }
-if (!/^(ghp_|github_pat_|gho_|ghu_|ghs_)/.test(token) && token.length < 20) {
+const looksToken = /^(ghp_|gho_|ghu_|ghs_|github_pat_)/.test(token) || /^[0-9a-f]{40}$/i.test(token)
+if (!looksToken) {
   console.error(`\n✗ 剪贴板里看起来不是 token：${look(token)}\n  GitHub 的 token 一般以 ghp_ 或 github_pat_ 开头。\n`)
   process.exit(1)
 }
