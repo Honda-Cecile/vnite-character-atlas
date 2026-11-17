@@ -132,8 +132,15 @@ releases/
     meta.json           ← 版本 / 日期 / git commit / 大小 / sha256
     SHA256SUMS.txt
   v1.1.0/
+    character-atlas-1.1.0.vnpkg
+    source-v1.1.0.zip    ← 这一版的完整源码（git archive 出来的 tag 快照）
+    meta.json            ← 版本 / 日期 / git commit / 大小 / 两个 sha256
     ...
 \`\`\`
+
+每个版本都带一份 **源码快照** `source-v<版本>.zip`：`.vnpkg` 里只有编译后的 `dist/index.js`，
+真要看/重建这一版得靠源码。快照由 `node scripts/backup-source.js` 生成（`npm run release` 时若已有 tag
+会自动带一份，`publish.cmd` 推完 tag 后也会补），`npm run check:releases` 会核对它的 sha256。
 
 ## 发布某个版本
 
@@ -255,6 +262,7 @@ const versionReadme = `# ${version}
 | \`CHANGELOG.md\` | 这一版的更新条目 |
 | \`meta.json\` | 版本 / 打包时间 / git commit / 大小 / sha256 |
 | \`SHA256SUMS.txt\` | 校验和 |
+| \`source-v${version}.zip\` | 这一版的完整源码快照（\`git archive v${version}\`）；包里的 dist 只有编译结果，源码靠它留底 |
 | \`publish.cmd\` | **双击发布**：commit 不在 GitHub 上就先推 tag，再建 Release、传包、回读确认 |
 | \`1-打开发布页.url\` | 备选：双击打开预填好 tag 与标题的 GitHub 新建 Release 页 |
 | \`2-复制发布说明.cmd\` | 备选：双击把 \`RELEASE_NOTES.md\` 复制进剪贴板，网页里 Ctrl+V |
@@ -337,6 +345,18 @@ fs.mkdirSync(RELEASES, { recursive: true })
 rebuildIndex(entries)
 fs.writeFileSync(path.join(RELEASES, 'README.md'), README, 'utf8')
 
+// ── 4.5 源码快照：把这个 tag 的源码树打进 source-v<版本>.zip ──────────────
+// 新打的 tag 这时通常还不存在（tag 是发布那一步的事），跳过就行；
+// publish.js 推完 tag 会再补一次，保证发布过的版本一定有源码快照。
+var snapLine = '无（本地还没有这个 tag，发布时会补）'
+try {
+  var snap = require('./backup-source').backupVersion(version, { mirror: false })
+  if (snap.status === 'ok') snapLine = `source-v${version}.zip (${(snap.bytes / 1024).toFixed(1)} KB)`
+  else snapLine = '跳过：' + snap.reason
+} catch (error) {
+  snapLine = '失败：' + error.message
+}
+
 // ── 5. 仓库外镜像 ─────────────────────────────────────────────────────────
 let mirrorLine = '已跳过外部镜像（--no-mirror）'
 if (mirror) {
@@ -356,6 +376,7 @@ console.log(`  安装包   ${path.relative(ROOT, stagedVnpkg)}  (${meta.sizeKB} 
 console.log(`  sha256   ${digest}`)
 console.log(`  版本目录 ${path.relative(ROOT, target)}/  → ${fs.readdirSync(target).join(', ')}`)
 console.log(`  累积索引 releases/CHANGELOG.md  （共 ${entries.length} 个版本：${entries.map((e) => e.version).sort().join(', ')}）`)
+console.log(`  源码快照 ${snapLine}`)
 console.log(`  备份     ${mirrorLine}`)
 if (meta.gitDirty) console.log('  ⚠ 工作区有未提交改动，产物的 gitCommit 只代表当时的 HEAD')
 if (!meta.gitTagExists) console.log(`  ⚠ 本地还没有 tag ${vtag}，记得 git tag -a ${vtag}`)

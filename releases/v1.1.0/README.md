@@ -9,6 +9,7 @@
 | `CHANGELOG.md` | 这一版的更新条目 |
 | `meta.json` | 版本 / 打包时间 / git commit / 大小 / sha256 |
 | `SHA256SUMS.txt` | 校验和 |
+| `source-v1.1.0.zip` | 这一版的完整源码快照（`git archive v1.1.0`）；包里的 dist 只有编译结果，源码靠它留底 |
 | `publish.cmd` | **双击发布**：commit 不在 GitHub 上就先推 tag，再建 Release、传包、回读确认 |
 | `1-打开发布页.url` | 备选：双击打开预填好 tag 与标题的 GitHub 新建 Release 页 |
 | `2-复制发布说明.cmd` | 备选：双击把 `RELEASE_NOTES.md` 复制进剪贴板，网页里 Ctrl+V |

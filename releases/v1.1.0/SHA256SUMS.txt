@@ -1,1 +1,2 @@
 700a4c990daf2d3d6b7e61b1733fade1d1843c61f46e70a3fb509e0bf045b3a0  character-atlas-1.1.0.vnpkg
+797e73db02285386d8fc43f3b543942f3ab016680bf12af4a7eefc5c1a9fc95a  source-v1.1.0.zip

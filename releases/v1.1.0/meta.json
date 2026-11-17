@@ -9,8 +9,15 @@
   "sha256": "700a4c990daf2d3d6b7e61b1733fade1d1843c61f46e70a3fb509e0bf045b3a0",
   "vniteVersion": "^4.0.0-beta.2",
   "author": "Honda-Cecile",
-  "stagedAt": "2026-11-17T14:47:22.127Z",
-  "gitCommit": "30a9994",
+  "stagedAt": "2026-11-17T14:53:56.184Z",
+  "gitCommit": "db7aa5b",
   "gitTagExists": true,
-  "gitDirty": true
+  "gitDirty": true,
+  "sourceZip": {
+    "name": "source-v1.1.0.zip",
+    "bytes": 1964316,
+    "sizeKB": 1918.28,
+    "sha256": "797e73db02285386d8fc43f3b543942f3ab016680bf12af4a7eefc5c1a9fc95a",
+    "commit": "d4ba8d7e31d7f11f3e45d50273b22f1a1f400781"
+  }
 }

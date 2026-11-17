@@ -184,6 +184,18 @@ async function pushRefs(refs, why) {
     else await pushRefs(['main'], '同时把 main 分支也推上去')
   }
 
+  // 1.5 源码快照：tag 这时肯定在本地了，把这一版的源码树打进 releases/v<ver>/
+  if (!dryRun) {
+    try {
+      const { backupVersion } = require('./backup-source')
+      const snap = backupVersion(version)
+      if (snap.status === 'ok') step(`源码快照 ${path.basename(snap.zip)} (${(snap.bytes / 1024).toFixed(1)} KB)`)
+      else step(`源码快照跳过：${snap.reason}`)
+    } catch (error) {
+      console.log(`  · 源码快照失败（不影响发布）：${error.message}`)
+    }
+  }
+
   // 2. Release + 附件：交给 upload-release.js（校验、幂等、回读都在那边）
   const uploadArgs = [path.join(ROOT, 'scripts', 'upload-release.js'), `--version=${version}`]
   if (dryRun) uploadArgs.push('--dry-run')

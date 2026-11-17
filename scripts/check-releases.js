@@ -125,6 +125,15 @@ for (const dir of dirs) {
     if (inside !== String(current.version)) issues.push(`当前 package.json 是 ${current.version}，但包里是 ${inside}`)
   }
 
+  // 6. 源码快照（有就核对 sha256；没有只提醒，不算错）
+  if (meta && meta.sourceZip) {
+    const snapFile = path.join(target, meta.sourceZip.name)
+    if (!fs.existsSync(snapFile)) issues.push(`缺源码快照 ${meta.sourceZip.name}`)
+    else if (sha256(snapFile) !== meta.sourceZip.sha256) issues.push('源码快照的 sha256 与 meta 记录不一致')
+  } else if (git(['tag', '-l', tag])) {
+    notes.push('还没有源码快照（node scripts/backup-source.js 补一份）')
+  }
+
   problems += issues.length
   rows.push({ version, issues, notes })
 }
