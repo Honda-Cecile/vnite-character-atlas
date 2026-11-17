@@ -1,1 +1,8 @@
 * text=auto eol=lf
+
+# Windows 批处理 / PowerShell 必须保留 CRLF：LF 会让 cmd.exe 的 if ( … ) 块解析出错
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 安装包是二进制，别做任何换行转换
+*.vnpkg binary
