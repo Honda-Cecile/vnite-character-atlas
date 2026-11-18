@@ -367,57 +367,6 @@ npm run typecheck    # tsc --noEmit
 | `node scripts/probe-double-activate.js` | `activate()` 重复调用的幂等性，不重复注册 IPC（离线） |
 | `node scripts/check-releases.js` | 发布前审计：目录名 / 包内版本 / tag / sha256 / 源码快照是否一一对上 |
 
-### 发版与产物归档
-
-每个版本都归档成一个自包含目录，**互不覆盖、只增不删**，由脚本生成，不要手工往里塞文件：
-
-```bash
-npm version patch          # 或 minor / major；顺带改 package.json 里的版本号
-# 改写 docs/RELEASE_NOTES.md（这一版的发布说明）与 docs/CHANGELOG.md（累积日志）里对应的段落
-npm run release            # = build + pack + 归档
-```
-
-`npm run release` 会做三件事：
-
-1. `npm run pack` 出 `dist/character-atlas-<版本号>.vnpkg`
-2. 归档到 `releases/v<版本号>/`：安装包 + 冻结的 `RELEASE_NOTES.md` + 该版本 `CHANGELOG.md` + `meta.json`（版本、打包时间、git commit、大小、sha256）+ `SHA256SUMS.txt`
-3. 刷新 `releases/CHANGELOG.md`（累积索引，新版本在上），并把整份产物镜像到仓库外的 `../character-atlas-releases-backup/`
-
-发布时只要进 `releases/v<版本号>/` 拿 `.vnpkg` 和 `RELEASE_NOTES.md` 即可；更省事的是**直接双击那个目录里的 `publish.cmd`**（或仓库根的 `publish.cmd`，发 `package.json` 里的版本）—— 一条链路做完：确认 commit 在 GitHub（不在就先推这一版的 tag，**只推 tag、不动 main**）→ 校验包（大小 / sha256 / 包内版本）→ 按 tag 建 Release（非 draft / 非 prerelease）→ 上传附件 → 回读确认。可重复运行，同名附件先删再传；`--dry-run` 只演练，`--no-push` 只上传，`--main` 顺手推主分支。
-
-```bash
-npm run upload                            # 发布当前版本
-node scripts/upload-release.js --version=1.1.0 --dry-run   # 演练，不联网写
-npm run check:releases                    # 发布前审计目录/包内版本/tag/sha256
-```
-
-上传需要一次性配 token：GitHub 建 PAT（classic 勾 `repo`；fine-grained 勾 Contents: Read and write），存到仓库根的 `.secrets/github-token`（已在 `.gitignore` 里）。`releases/` 里的安装包被 git 跟踪（`.gitignore` 里开了例外），推到 GitHub 就是异地备份；仓库外那份镜像用来兜「目录被删 / 重装系统」。
-
-补归档历史版本：`node scripts/stage-release.js --version=1.0.0`（需要 `dist/` 里还留着那个包；发布说明会从对应的 git tag 里取）。
-
-源码结构：
-
-```
-src/
-├── index.ts              插件入口：生命周期、事件、IPC、刮削编排、导出导入
-├── config.ts             14 项配置的默认值
-├── cache.ts              PluginDB 缓存（TTL + 硬过期）
-├── pluginKv.ts           PluginDB 读写（409 冲突重试）
-├── overrides.ts          个人修正层（编辑 / 删除）
-├── metadata.ts           metadata.extra.characters 同步
-├── images.ts             图片下载、本地缓存、导出/导入时的 base64 打包
-├── kungal/               NextMoe API：client / resolve / characters / types
-├── vndb/vndb.ts          VNDB 兜底
-└── native/
-    ├── electron.ts       拿 Electron 模块（dialog / shell，不依赖注入器）
-    ├── injector.ts       主进程侧：executeJavaScript、数据下发、命令回传
-    └── bootstrap.ts      注入到渲染进程的脚本（标签注入 + 面板 + 弹窗 + 右键菜单 + 设置页工具条）
-```
-
-注入脚本是以函数源码字符串形式序列化的（`nativeBootstrap.toString()`），所以改 `bootstrap.ts` 就等于改渲染进程代码，`tsc` 会顺带做类型检查。**探针读的是 `dist/index.js`，改 `src` 之后必须先 `npm run build`。**
-
----
-
 ## 致谢与许可
 
 - 数据来自 [KunMoe](https://github.com/KunMoe/kun-galgame-infra) 的 NextMoe Public API v2，请遵守其[使用条款与限流](https://developer.nextmoe.dev)
