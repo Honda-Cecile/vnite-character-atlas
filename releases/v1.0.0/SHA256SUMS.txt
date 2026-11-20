@@ -1,1 +1,0 @@
-88bc6270e052a82f0a7ee6101c748a3eeeb057d30ba59396b43ca236c443aa52  character-atlas-1.0.0.vnpkg
