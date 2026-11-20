@@ -92,7 +92,10 @@ function assert(condition, message) {
   await plugin.activate(api)
   const service = api.__characterPanelService
   assert(Boolean(service), 'activate 后可通过 api.__characterPanelService 拿到服务实例')
-  assert(Object.keys(ipcHandlers).length === 7, `注册 7 个 IPC 频道（实际 ${Object.keys(ipcHandlers).length}）`)
+  assert(
+    Object.keys(ipcHandlers).length === 13,
+    `注册 13 个 IPC 频道（实际 ${Object.keys(ipcHandlers).length}）`
+  )
   assert(Boolean(eventHandlers['game:added']), '监听 game:added 事件')
 
   const started = Date.now()
@@ -248,6 +251,46 @@ function assert(condition, message) {
   const legacy = await svc.importCharacters(legacyPath)
   assert(legacy.ok === true, `旧版（无 overrides）文件仍可导入（count=${legacy.count}）`)
   fs.rmSync(legacyPath, { force: true })
+
+  // 1.2.0 新增：缓存统计 / 登场作品列表 / 清理过期缓存
+  const stats = await svc.cacheStats()
+  assert(
+    stats && stats.ok === true,
+    `缓存统计可用（作品 ${stats.games} 部 / 人物 ${stats.characters} 人 / 图片 ${stats.images} 个 ${stats.imageSize}）`
+  )
+  assert(stats.games >= 1 && stats.characters >= 1, '缓存统计数字非空')
+  assert(typeof stats.dir === 'string' && stats.dir.length > 0, `缓存目录可读（${stats.dir}）`)
+
+  const appearId = restored.characters[0] && restored.characters[0].id
+  try {
+    // 前面的刮削可能已经把本分钟 45 次额度用掉大半，登场作品再打就可能撞本地限流；
+    // 这里按插件自己给的「请 N 秒后重试」等一轮再打，避免把节奏问题误报成接口坏了
+    let appear = await svc.appearances(appearId)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const text = appear && appear.error ? String(appear.error) : ''
+      const limited = /本地限流/.test(text)
+      if (!limited && !/fetch failed|NETWORK_ERROR|网络请求失败/.test(text)) break
+      const wait = limited ? Number((text.match(/(\d+)\s*秒/) || [])[1] || 50) + 2 : 8
+      console.log(`   登场作品${limited ? '撞本地限流' : '网络抖动'}，等 ${wait} 秒重试…`)
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000))
+      appear = await svc.appearances(appearId)
+    }
+    if (!appear || appear.ok !== true) console.log('   登场作品原始返回:', JSON.stringify(appear), 'charId=', appearId)
+    assert(appear && appear.ok === true && Array.isArray(appear.items), '登场作品接口可用')
+    if (appear.items && appear.items.length) {
+      assert(
+        typeof appear.items[0].title === 'string' && appear.items[0].title.length > 0,
+        `登场作品有标题（${appear.items[0].title} / ${appear.items[0].role}）`
+      )
+    } else {
+      console.log('  · 登场作品为空（可能是只登场这一部作品的角色）')
+    }
+  } catch (error) {
+    console.log(`  · 跳过登场作品断言（${error && error.message}）`)
+  }
+
+  const pruned = await svc.pruneCache()
+  assert(pruned && pruned.ok === true, `清理过期缓存可用（本次删除 ${pruned.removed} 部）`)
 
   // 0.7.0 起独立 HTML 面板链路已删除（渲染由原生标签页负责），这里只校验剩下的数据通道
   const clearResult = await ipcHandlers['character-atlas:clear-cache']({ gameId: 'game-1' })

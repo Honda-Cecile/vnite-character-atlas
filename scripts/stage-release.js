@@ -132,8 +132,15 @@ releases/
     meta.json           ← 版本 / 日期 / git commit / 大小 / sha256
     SHA256SUMS.txt
   v1.1.0/
+    character-atlas-1.1.0.vnpkg
+    source-v1.1.0.zip    ← 这一版的完整源码（git archive 出来的 tag 快照）
+    meta.json            ← 版本 / 日期 / git commit / 大小 / 两个 sha256
     ...
 \`\`\`
+
+每个版本都带一份 **源码快照** \`source-v<版本>.zip\`：\`.vnpkg\` 里只有编译后的 \`dist/index.js\`，
+真要看/重建这一版得靠源码。快照由 \`node scripts/backup-source.js\` 生成（\`npm run release\` 时若已有 tag
+会自动带一份，\`publish.cmd\` 推完 tag 后也会补），\`npm run check:releases\` 会核对它的 sha256。
 
 ## 发布某个版本
 
@@ -226,6 +233,67 @@ const meta = {
 fs.writeFileSync(path.join(target, 'meta.json'), `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
 fs.writeFileSync(path.join(target, 'SHA256SUMS.txt'), `${digest}  ${fileName}\n`, 'utf8')
 
+// ── 3.5 每个版本目录里放一份「一键发布」脚本：推 tag（需要时）+ 建 Release + 传包 ──
+const publishCmd = `@echo off
+chcp 65001 >nul
+rem Publish ${version}: push tag if needed, then create/refresh the GitHub Release and upload the package.
+rem Extra args are passed through: publish.cmd --dry-run / --no-push / --main
+cd /d "%~dp0..\\.."
+node scripts\\publish.js --version=${version} %*
+if errorlevel 1 (
+  echo.
+  echo [FAILED] see the lines above.
+) else (
+  echo.
+  echo [OK] check the Releases page on GitHub.
+)
+echo.
+pause >nul
+`
+
+const versionReadme = `# ${version}
+
+这个目录是这个版本的全部产物，**不要手动改内容**，要改就改源码后重新 \`npm run release\`。
+
+| 文件 | 用途 |
+| --- | --- |
+| \`${fileName}\` | 安装包。Vnite 里装的就是它；上传到 GitHub Release 的附件也是它 |
+| \`RELEASE_NOTES.md\` | 冻结的发布说明（当时那份，不会随源码变化）。GitHub Release 正文用这份 |
+| \`CHANGELOG.md\` | 这一版的更新条目 |
+| \`meta.json\` | 版本 / 打包时间 / git commit / 大小 / sha256 |
+| \`SHA256SUMS.txt\` | 校验和 |
+| \`source-v${version}.zip\` | 这一版的完整源码快照（\`git archive v${version}\`）；包里的 dist 只有编译结果，源码靠它留底 |
+| \`publish.cmd\` | **双击发布**：commit 不在 GitHub 上就先推 tag，再建 Release、传包、回读确认 |
+
+## 双击 publish.cmd
+
+一步做完：确认 commit 在 GitHub（不在就 \`git push v${version}\`，**只推 tag，不动 main**）→ 校验包（大小 / sha256 / 包内版本）→ 建 Release（非 draft / 非 prerelease，正文取冻结的 \`RELEASE_NOTES.md\`）→ 上传附件（同名先删再传）→ 回读确认并打印下载地址。
+
+可重复运行，不想要正式发布就先演练：
+
+\`\`\`
+publish.cmd --dry-run     只打印会做什么，不联网改任何东西
+publish.cmd --no-push     不推 tag，只上传（tag 已在远端时用）
+publish.cmd --main        顺手把 main 也推上去（默认不推）
+\`\`\`
+
+token 用一次就够了（仓库根的 \`set-token.cmd\` 会读剪贴板写入 \`.secrets/github-token\` 并验证写权限）。
+
+## 手动发（不想用脚本）
+
+GitHub → Releases → Draft a new release → **Choose a tag** 选已存在的 \`v${version}\`（**不要**新建 tag）→ 正文粘贴 \`RELEASE_NOTES.md\` → 附件选 \`${fileName}\` → 不要勾 prerelease、不要存 draft。
+`
+
+fs.writeFileSync(path.join(target, 'publish.cmd'), publishCmd.replace(/\n/g, '\r\n'), 'utf8')
+fs.writeFileSync(path.join(target, 'README.md'), versionReadme, 'utf8')
+
+// publish.cmd 只写 ASCII：cmd.exe 在 chcp 65001 之后按字节读文件，多字节内容会让行错位。
+if (/[^\x00-\x7F]/.test(publishCmd)) {
+  throw new Error('publish.cmd 里出现非 ASCII 字符，cmd 会解析错乱')
+}
+fs.writeFileSync(path.join(target, 'README.md'), versionReadme, 'utf8')
+
+
 // ── 4. 刷新累积索引 ───────────────────────────────────────────────────────
 const entries = fs
   .readdirSync(RELEASES, { withFileTypes: true })
@@ -242,11 +310,28 @@ fs.mkdirSync(RELEASES, { recursive: true })
 rebuildIndex(entries)
 fs.writeFileSync(path.join(RELEASES, 'README.md'), README, 'utf8')
 
+// ── 4.5 源码快照：把这个 tag 的源码树打进 source-v<版本>.zip ──────────────
+// 新打的 tag 这时通常还不存在（tag 是发布那一步的事），跳过就行；
+// publish.js 推完 tag 会再补一次，保证发布过的版本一定有源码快照。
+var snapLine = '无（本地还没有这个 tag，发布时会补）'
+try {
+  var snap = require('./backup-source').backupVersion(version, { mirror: false })
+  if (snap.status === 'ok') snapLine = `source-v${version}.zip (${(snap.bytes / 1024).toFixed(1)} KB)`
+  else snapLine = '跳过：' + snap.reason
+} catch (error) {
+  snapLine = '失败：' + error.message
+}
+
 // ── 5. 仓库外镜像 ─────────────────────────────────────────────────────────
 let mirrorLine = '已跳过外部镜像（--no-mirror）'
 if (mirror) {
   const mirrorDir = path.join(MIRROR_ROOT, dirName)
   fs.mkdirSync(mirrorDir, { recursive: true })
+  // 镜像要「同步」而不是「叠加」：先把镜像目录里这一版不该再有的文件删掉
+  // （比如上一版生成过的 upload.cmd / upload.ps1），否则备份里会留着已经下线的脚本
+  for (const stale of fs.readdirSync(mirrorDir)) {
+    if (!fs.existsSync(path.join(target, stale))) fs.rmSync(path.join(mirrorDir, stale), { force: true })
+  }
   for (const name of fs.readdirSync(target)) {
     fs.copyFileSync(path.join(target, name), path.join(mirrorDir, name))
   }
@@ -261,6 +346,7 @@ console.log(`  安装包   ${path.relative(ROOT, stagedVnpkg)}  (${meta.sizeKB} 
 console.log(`  sha256   ${digest}`)
 console.log(`  版本目录 ${path.relative(ROOT, target)}/  → ${fs.readdirSync(target).join(', ')}`)
 console.log(`  累积索引 releases/CHANGELOG.md  （共 ${entries.length} 个版本：${entries.map((e) => e.version).sort().join(', ')}）`)
+console.log(`  源码快照 ${snapLine}`)
 console.log(`  备份     ${mirrorLine}`)
 if (meta.gitDirty) console.log('  ⚠ 工作区有未提交改动，产物的 gitCommit 只代表当时的 HEAD')
 if (!meta.gitTagExists) console.log(`  ⚠ 本地还没有 tag ${vtag}，记得 git tag -a ${vtag}`)

@@ -243,6 +243,31 @@ export class ImageCache {
     const memo = this.memory.get(memoKey)
     if (memo) return memo
 
+    // 用户换过的本地图：`local:<绝对路径>` —— 直接读盘缩图，不联网
+    if (source.indexOf('local:') === 0) {
+      try {
+        const raw = await fs.readFile(source.slice(6))
+        let bytes: Buffer = raw
+        let mime = detectMime(raw, null)
+        const nativeImage = this.electron?.nativeImage
+        if (nativeImage) {
+          const image = nativeImage.createFromBuffer(raw)
+          if (!image.isEmpty()) {
+            bytes = Buffer.from(
+              image.resize({ width: targetWidth, quality: 'good' }).toJPEG(JPEG_QUALITY)
+            )
+            mime = 'image/jpeg'
+          }
+        }
+        const uri = 'data:' + mime + ';base64,' + bytes.toString('base64')
+        this.memory.set(memoKey, uri)
+        return uri
+      } catch (error) {
+        this.log(`本地图片读取失败 ${source}: ${String(error)}`)
+        return undefined
+      }
+    }
+
     try {
       const dir = await this.dir()
       const base = path.join(dir, this.fileBase(source, targetWidth, label))
@@ -316,6 +341,26 @@ export class ImageCache {
     } catch (error) {
       this.log(`头像缓存失败 ${source}: ${String(error)}`)
       return undefined
+    }
+  }
+
+  /**
+   * 把用户选的本地图片复制进缓存目录（跟着 Vnite 的「备份数据库」一起走），
+   * 返回落盘后的绝对路径；换图只记这个路径，不动原文件。
+   */
+  async storeLocal(file: string): Promise<string | null> {
+    try {
+      const raw = await fs.readFile(file)
+      const hash = createHash('sha1').update(raw).digest('hex').slice(0, 16)
+      const dir = await this.dir()
+      const ext = (path.extname(file) || '.jpg').toLowerCase()
+      const target = path.join(dir, 'custom__' + hash + ext)
+      await fs.writeFile(target, raw)
+      this.memory.delete(Math.round(TARGET_WIDTH) + '|local:' + target)
+      return target
+    } catch (error) {
+      this.log(`本地图片复制失败 ${file}: ${String(error)}`)
+      return null
     }
   }
 

@@ -142,8 +142,8 @@ const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
   again.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 300 }))
   await wait(80)
   const menu2 = document.getElementById('vncp-menu')
-  if (menu2 && menu2.children[1]) {
-    menu2.children[1].click()
+  if (menu2 && menu2.children[menu2.children.length - 1]) {
+    menu2.children[menu2.children.length - 1].click()
     await wait(120)
     const cmd = last()
     out.push('删除命令=' + (cmd && cmd.cmd) + ' gameId=' + (cmd && cmd.gameId) + ' id=' + (cmd && cmd.id) + ' name=' + (cmd && cmd.name))
@@ -188,7 +188,7 @@ console.log(text || '没有拿到结果')
 const checks = [
   ['标签注入', /标签注入=true/],
   ['卡片数量=3', /卡片数量=3/],
-  ['右键出现菜单=2 项', /右键出现菜单=true 菜单项=2/],
+  ['右键出现菜单=2 项', /右键出现菜单=true 菜单项=4/],
   ['菜单文案含编辑与删除', /编辑这个人的资料[\s\S]*从本作人物栏删除/],
   ['编辑弹窗=13 个字段', /编辑弹窗=true 输入框数=13/],
   ['名字预填', /名字预填=姫野原 鈴蘭/],

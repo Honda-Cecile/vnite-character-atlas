@@ -73,14 +73,14 @@ function check(name, fn) {
 ;(async () => {
   // 场景 1：同一 api 连续 activate 两次（第一次正常，第二次走「上一个实例」分支）
   await plugin.activate(api)
-  check('第 1 次 activate 注册 7 个 handler', () => {
-    if (registered.size !== 7) throw new Error(`实际 ${registered.size}`)
+  check('第 1 次 activate 注册 13 个 handler', () => {
+    if (registered.size !== 13) throw new Error(`实际 ${registered.size}`)
   })
 
   const firstService = api.__characterPanelService
   await plugin.activate(api)
   check('第 2 次 activate 未抛 second handler', () => {
-    if (registered.size !== 7) throw new Error(`实际 ${registered.size}`)
+    if (registered.size !== 13) throw new Error(`实际 ${registered.size}`)
   })
   check('旧实例被替换', () => {
     if (api.__characterPanelService === firstService) throw new Error('仍是同一个实例')
@@ -92,7 +92,7 @@ function check(name, fn) {
   check('同一实例重复 install() 不抛错', () => {
     service.install()
     service.install()
-    if (registered.size !== 7) throw new Error(`实际 ${registered.size}`)
+    if (registered.size !== 13) throw new Error(`实际 ${registered.size}`)
   })
 
   // 场景 3：脏 handler —— 模拟上一个模块实例没走 deactivate 就消失了

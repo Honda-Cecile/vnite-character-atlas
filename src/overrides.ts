@@ -30,6 +30,9 @@ export interface CharacterEdit {
   bloodType?: string
   intro?: string
   aliases?: string
+  /** 用户自己换的头像 / 立绘：存缓存目录里的绝对路径（apply 时转成 `local:` 前缀） */
+  imageFile?: string
+  figureFile?: string
   updatedAt?: number
 }
 
@@ -87,6 +90,9 @@ function splitAliases(value: string): string[] {
 /** 把一条编辑记录叠到刮削结果上（只覆盖用户显式改过的字段） */
 function applyEdit(character: PanelCharacter, edit: CharacterEdit): PanelCharacter {
   const next: PanelCharacter = { ...character }
+  // 换过图的人：先标成 `local:<绝对路径>`，发布前统一由 ImageCache 转成 data URI
+  if (edit.imageFile) next.imageUrl = 'local:' + edit.imageFile
+  if (edit.figureFile) next.figureUrl = 'local:' + edit.figureFile
   if (edit.name !== undefined && clean(edit.name)) {
     next.name = clean(edit.name)
     // 名字改了以后「机器翻译」标记就没有意义了
@@ -184,6 +190,22 @@ export class CharacterOverrides {
     if (!target) return false
     doc.edited[target] = { ...(doc.edited[target] || {}), ...patch, updatedAt: Date.now() }
     // 编辑一个被删掉的角色 = 重新把它请回来
+    const index = doc.removed.indexOf(target)
+    if (index >= 0) doc.removed.splice(index, 1)
+    await this.save(gameId, doc)
+    return true
+  }
+
+  /** 右键换图：把本地图片路径挂到修正层（图片文件本身由 ImageCache 复制进缓存目录） */
+  async setImage(
+    gameId: string,
+    id: string,
+    patch: { imageFile?: string; figureFile?: string }
+  ): Promise<boolean> {
+    const doc = await this.doc(gameId)
+    const target = String(id)
+    if (!target) return false
+    doc.edited[target] = { ...(doc.edited[target] || {}), ...patch, updatedAt: Date.now() }
     const index = doc.removed.indexOf(target)
     if (index >= 0) doc.removed.splice(index, 1)
     await this.save(gameId, doc)

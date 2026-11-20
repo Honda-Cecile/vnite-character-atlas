@@ -1,10 +1,12 @@
 /**
- * 剧透开关探针（本地验证，不进包）。
+ * 剧透标签探针（本地验证，不进包）。
  *
  * 用 BOOTSTRAP_SOURCE 造一份仿 Vnite 详情页，断言：
  *   1. 卡片上的小标签只要「无剧透」的（实妹 / 青梅竹马 不该出现）；
- *   2. 详情弹窗里默认只显示无剧透标签，剧透标签在折叠区里（display:none）；
- *   3. 有「显示剧透（N）」按钮，点一下展开、再点收起，data-open 同步。
+ *   2. 剧透标签不再单独成块，而是和普通标签混在同一排（同一个 .vncp-trait-group 行里），
+ *      默认 display:none，点「显示剧透」就地展开；
+ *   3. 标题计数随展开变化：收起时只数无剧透的，展开后数全部；
+ *   4. 按钮文案 / data-open 同步。
  *
  *   node scripts/probe-spoiler.js
  */
@@ -94,6 +96,10 @@ const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><tit
 <script>
 (async function () {
   const out = []
+  const visible = (node) => {
+    if (!node) return false
+    return getComputedStyle(node).display !== 'none' && node.offsetParent !== null
+  }
   try {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms))
     await wait(900)
@@ -110,27 +116,48 @@ const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><tit
 
     const modal = document.getElementById('vncp-modal')
     out.push('详情弹窗=' + !!modal)
-    const plainHits = Array.from(document.querySelectorAll('.vncp-modal .vncp-trait-hit:not(.vncp-trait-spoil)')).map((n) => n.textContent)
-    out.push('无剧透标签=' + plainHits.join(','))
-    const box = document.querySelector('.vncp-spoiler-box')
-    const spoils = box ? Array.from(box.querySelectorAll('.vncp-trait-hit')).map((n) => n.textContent) : []
-    out.push('折叠区标签=' + spoils.join(','))
-    out.push('折叠区可见=' + (box ? box.style.display !== 'none' : 'n/a'))
+
+    // 标签按类别分组：每行一个 .vncp-trait-group
+    const rows = Array.from(document.querySelectorAll('.vncp-modal .vncp-trait-group'))
+    out.push('标签行=' + rows.map((row) => (row.querySelector('b') || {}).textContent).join('|'))
+
+    const allChips = Array.from(document.querySelectorAll('.vncp-modal .vncp-trait-hit'))
+    out.push('全部标签=' + allChips.map((n) => n.textContent).join(','))
+    out.push('默认可见标签=' + allChips.filter(visible).map((n) => n.textContent).join(','))
+    out.push('默认隐藏标签=' + allChips.filter((n) => !visible(n)).map((n) => n.textContent).join(','))
+
+    // 剧透项和普通项必须在同一行里（而不是独立一块）
+    const sameRow = (function () {
+      const sib = document.querySelector('.vncp-modal .vncp-trait-hit[data-spoiler="1"]')
+      const plain = document.querySelector('.vncp-modal .vncp-trait-hit:not([data-spoiler="1"])')
+      if (!sib || !plain) return 'n/a'
+      const a = sib.parentElement
+      const b = plain.parentElement
+      return String(!!a && a === b && a.classList.contains('vncp-trait-group'))
+    })()
+    out.push('剧透与普通同行=' + sameRow)
+    out.push('独立折叠块=' + !!document.querySelector('.vncp-spoiler-box'))
+
+    const title = document.querySelector('.vncp-modal .vncp-trait-head .vncp-section-title')
+    out.push('标题=' + (title ? title.textContent : '无'))
     const toggle = document.querySelector('.vncp-trait-toggle')
     out.push('剧透按钮=' + (toggle ? toggle.textContent : '无') + ' data-open=' + (toggle ? toggle.getAttribute('data-open') : 'n/a'))
 
     if (toggle) {
       toggle.click()
       await wait(120)
-      const opened = document.querySelector('.vncp-spoiler-box')
-      out.push('点击后折叠区可见=' + (opened ? opened.style.display !== 'none' : 'n/a'))
+      const later = Array.from(document.querySelectorAll('.vncp-modal .vncp-trait-hit'))
+      out.push('点击后可见标签=' + later.filter(visible).map((n) => n.textContent).join(','))
+      out.push('点击后标题=' + (title ? title.textContent : '无'))
       out.push('点击后按钮=' + toggle.textContent + ' data-open=' + toggle.getAttribute('data-open'))
       toggle.click()
       await wait(120)
-      const closed = document.querySelector('.vncp-spoiler-box')
-      out.push('再点后折叠区可见=' + (closed ? closed.style.display !== 'none' : 'n/a'))
+      const back = Array.from(document.querySelectorAll('.vncp-modal .vncp-trait-hit'))
+      out.push('再点后可见标签=' + back.filter(visible).map((n) => n.textContent).join(','))
+      out.push('再点后标题=' + (title ? title.textContent : '无'))
       out.push('再点后按钮=' + toggle.textContent + ' data-open=' + toggle.getAttribute('data-open'))
     }
+
     // ?open=1 时把剧透展开，方便截图（不影响上面的断言）
     if (location.search.indexOf('open') >= 0) {
       const again = document.querySelector('.vncp-trait-toggle')
@@ -172,13 +199,19 @@ const checks = [
   ['卡片只显示无剧透标签', /卡片小标签=妹妹/],
   ['卡片不含剧透标签', /卡片小标签=(?!.*实妹)(?!.*青梅竹马)/],
   ['详情弹窗打开', /详情弹窗=true/],
-  ['默认展开的标签只有无剧透', /无剧透标签=妹妹/],
-  ['折叠区里有两条剧透标签', /折叠区标签=实妹,青梅竹马/],
-  ['折叠区默认不可见', /折叠区可见=false/],
+  ['标签按类别分行（角色身份|关系）', /标签行=角色身份\|关系/],
+  ['剧透标签也在同一批标签里', /全部标签=妹妹,实妹,青梅竹马/],
+  ['默认只显示无剧透标签', /默认可见标签=妹妹(?!,)/],
+  ['默认隐藏两条剧透标签', /默认隐藏标签=实妹,青梅竹马(?!,)/],
+  ['剧透与普通项同一行（不再单独成块）', /剧透与普通同行=true/],
+  ['没有独立折叠块', /独立折叠块=false/],
+  ['默认标题只数无剧透', /标题=特征（1）/],
   ['默认按钮文案', /剧透按钮=显示剧透（2） data-open=0/],
-  ['点击后可见', /点击后折叠区可见=true/],
+  ['点击后剧透就地展开', /点击后可见标签=妹妹,实妹,青梅竹马/],
+  ['点击后标题变总数', /点击后标题=特征（3）/],
   ['点击后按钮变收起', /点击后按钮=收起剧透（2） data-open=1/],
-  ['再点后收起', /再点后折叠区可见=false/],
+  ['再点后收起', /再点后可见标签=妹妹(?!,)/],
+  ['再点后标题复原', /再点后标题=特征（1）/],
   ['再点后按钮复原', /再点后按钮=显示剧透（2） data-open=0/]
 ]
 
@@ -190,6 +223,6 @@ for (const [name, re] of checks) {
     console.log('❌ ' + name)
   }
 }
-console.log(bad === 0 ? '\n✅ 剧透开关全部通过' : `\n❌ ${bad} 项未通过`)
+console.log(bad === 0 ? '\n✅ 剧透标签（并入原标签流）全部通过' : `\n❌ ${bad} 项未通过`)
 console.log('截图:', png, '|', pngOpen)
 process.exit(bad === 0 ? 0 : 1)

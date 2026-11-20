@@ -336,6 +336,23 @@ export function nativeBootstrap(): void {
     'cursor:pointer;flex:0 0 auto;color:var(--vncp-dim);border:1px solid var(--vncp-line);background:transparent;}',
     '.vncp-trait-toggle:hover{color:var(--vncp-accent);border-color:var(--vncp-accent);}',
     '.vncp-trait-spoil{opacity:.66;border-bottom:1px dashed currentColor;}',
+    '.vncp-dialog-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;}',
+    '.vncp-act{font:inherit;font-size:.84em;line-height:1.6;padding:5px 12px;border-radius:8px;cursor:pointer;',
+    'color:var(--vncp-fg);border:1px solid var(--vncp-line);background:var(--vncp-chip);}',
+    '.vncp-act:hover{border-color:var(--vncp-accent);color:var(--vncp-accent);}',
+    '.vncp-act:disabled{opacity:.5;cursor:default;}',
+    '.vncp-appear{display:flex;flex-direction:column;gap:4px;}',
+    '.vncp-appear-row{display:flex;gap:10px;align-items:baseline;font:inherit;font-size:.92em;text-align:left;',
+    'cursor:pointer;border:1px solid transparent;border-radius:8px;padding:5px 8px;background:transparent;color:inherit;}',
+    '.vncp-appear-row:hover{border-color:var(--vncp-accent);color:var(--vncp-accent);}',
+    '.vncp-appear-row[data-link="0"]{cursor:default;}',
+    '.vncp-appear-row[data-link="0"]:hover{border-color:transparent;color:inherit;}',
+    '.vncp-appear-role{font-size:.86em;color:var(--vncp-dim);flex:0 0 auto;}',
+    '.vncp-stats{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:.94em;line-height:1.6;margin-top:6px;}',
+    '.vncp-stats b{font-weight:500;color:var(--vncp-dim);white-space:nowrap;}',
+    '.vncp-keymap{margin-top:10px;font-size:.82em;line-height:1.7;color:var(--vncp-dim);}',
+    '.vncp-keymap kbd{font:inherit;font-size:.94em;padding:1px 6px;margin:0 2px;border-radius:5px;',
+    'border:1px solid var(--vncp-line);background:var(--vncp-chip);color:var(--vncp-fg);}',
     '.vncp-modal .vncp-chip{margin:0 4px 4px 0;display:inline-block;font-size:.86em;}',
     '.vncp-link{display:inline-block;margin:0 10px 6px 0;font-size:.9em;color:var(--vncp-accent);',
     'background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;',
@@ -1300,6 +1317,38 @@ export function nativeBootstrap(): void {
       info.appendChild(cvLine)
     }
     if (character.meta) info.appendChild(el('div', 'vncp-dialog-sub', String(character.meta)))
+
+    const actions = el('div', 'vncp-dialog-actions')
+    const shot = el('button', 'vncp-act', '保存成图片') as HTMLButtonElement
+    shot.type = 'button'
+    shot.title = '把这张人物卡画成 PNG 存到本地（900×1260）'
+    shot.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      void saveCardImage(character, shot)
+    })
+    actions.appendChild(shot)
+    info.appendChild(actions)
+    const keymap = el('div', 'vncp-keymap')
+    const key = function (text: string): HTMLElement {
+      const node = document.createElement('kbd')
+      node.textContent = text
+      return node
+    }
+    const hint: Array<[string, string]> = [
+      ['←', '→ 换人'],
+      ['E', '编辑'],
+      ['S', '出图'],
+      ['T', '剧透'],
+      ['Esc', '关闭']
+    ]
+    for (let i = 0; i < hint.length; i++) {
+      if (i) keymap.appendChild(document.createTextNode(' · '))
+      keymap.appendChild(key(hint[i][0]))
+      keymap.appendChild(document.createTextNode(' ' + hint[i][1]))
+    }
+    info.appendChild(keymap)
+
     head.appendChild(info)
     dialog.appendChild(head)
 
@@ -1355,85 +1404,87 @@ export function nativeBootstrap(): void {
     }
 
     type DialogTrait = { g?: string; n: string; s?: boolean; sp?: string }
-    const traits = (character.traits || []) as DialogTrait[]
+    const traits = ((character.traits || []) as DialogTrait[]).filter(function (item) {
+      return item && item.n
+    })
     if (traits.length) {
-      // 默认只显示「无剧透」标签；点了「显示剧透」才把 minor/major 的展开 —— 和 Kungal 一致
-      const plain: DialogTrait[] = []
-      const spoilers: DialogTrait[] = []
+      // 剧透标签不单独成块：直接并进按类别分组的同一片标签里，默认只是「看不见」，
+      // 点右上角按钮就地显示 / 收起 —— 视觉上始终是一整排标签，不破坏排版。
+      let plainCount = 0
+      const spoil: HTMLElement[] = []
       for (let i = 0; i < traits.length; i++) {
-        const item = traits[i]
-        if (!item || !item.n) continue
-        if (item.sp) spoilers.push(item)
-        else plain.push(item)
+        if (!traits[i].sp) plainCount++
       }
 
       const section = el('div', 'vncp-section')
       const head = el('div', 'vncp-trait-head')
-      head.appendChild(el('div', 'vncp-section-title', '特征（' + plain.length + '）'))
+      const title = el('div', 'vncp-section-title', '特征（' + plainCount + '）')
+      head.appendChild(title)
       section.appendChild(head)
 
-      const appendGroups = function (target: HTMLElement, list: DialogTrait[], mark: boolean): void {
-        const groups: string[] = []
-        const bucket: Record<string, DialogTrait[]> = {}
-        for (let i = 0; i < list.length; i++) {
-          const group = String(list[i].g || '其他')
-          if (!bucket[group]) {
-            bucket[group] = []
-            groups.push(group)
-          }
-          bucket[group].push(list[i])
+      const order: string[] = []
+      const bucket: Record<string, DialogTrait[]> = {}
+      for (let i = 0; i < traits.length; i++) {
+        const group = String(traits[i].g || '其他')
+        if (!bucket[group]) {
+          bucket[group] = []
+          order.push(group)
         }
-        for (let i = 0; i < groups.length; i++) {
-          const line = el('div', 'vncp-trait-group')
-          const label = document.createElement('b')
-          label.textContent = groups[i]
-          line.appendChild(label)
-          const items = bucket[groups[i]]
-          for (let j = 0; j < items.length; j++) {
-            const item = items[j]
-            // 性相关特质在 Kungal 上会单独成组（被动(性) 等），这里标「·性」而不是丢掉
-            const chip = el(
-              'button',
-              'vncp-trait-hit' + (mark ? ' vncp-trait-spoil' : ''),
-              item.n + (item.s ? '·性' : '')
-            ) as HTMLButtonElement
-            chip.type = 'button'
-            chip.title = mark ? '含剧透 · 只看「' + item.n + '」的角色' : '只看「' + item.n + '」的角色'
-            chip.addEventListener('click', function (event) {
-              event.preventDefault()
-              event.stopPropagation()
-              closeDetail()
-              // 用标签名做全局搜索：命中所有作品里带这个标签的角色
-              setSearch(String(item.n))
-            })
-            line.appendChild(chip)
-          }
-          target.appendChild(line)
-        }
+        bucket[group].push(traits[i])
       }
 
-      appendGroups(section, plain, false)
+      for (let i = 0; i < order.length; i++) {
+        const line = el('div', 'vncp-trait-group')
+        const label = document.createElement('b')
+        label.textContent = order[i]
+        line.appendChild(label)
+        const items = bucket[order[i]]
+        for (let j = 0; j < items.length; j++) {
+          const item = items[j]
+          const hidden = !!item.sp
+          // 性相关特质在 Kungal 上会单独成组（被动(性) 等），这里标「·性」而不是丢掉
+          const chip = el(
+            'button',
+            'vncp-trait-hit' + (hidden ? ' vncp-trait-spoil' : ''),
+            item.n + (item.s ? '·性' : '')
+          ) as HTMLButtonElement
+          chip.type = 'button'
+          chip.title = (hidden ? '含剧透 · 只看「' : '只看「') + item.n + '」的角色'
+          if (hidden) {
+            chip.style.display = 'none'
+            chip.setAttribute('data-spoiler', '1')
+            spoil.push(chip)
+          }
+          chip.addEventListener('click', function (event) {
+            event.preventDefault()
+            event.stopPropagation()
+            closeDetail()
+            // 用标签名做全局搜索：命中所有作品里带这个标签的角色
+            setSearch(String(item.n))
+          })
+          line.appendChild(chip)
+        }
+        section.appendChild(line)
+      }
 
-      if (spoilers.length) {
-        const box = el('div', 'vncp-spoiler-box')
-        box.style.display = 'none'
-        appendGroups(box, spoilers, true)
-
+      if (spoil.length) {
         const toggle = el('button', 'vncp-trait-toggle') as HTMLButtonElement
         toggle.type = 'button'
         toggle.setAttribute('data-open', '0')
-        toggle.textContent = '显示剧透（' + spoilers.length + '）'
-        toggle.title = '这些标签会透露剧情走向，默认收起；点一下展开'
+        toggle.textContent = '显示剧透（' + spoil.length + '）'
+        toggle.title = '这些标签会透露剧情走向，默认收起；点一下就地展开'
         toggle.addEventListener('click', function (event) {
           event.preventDefault()
           event.stopPropagation()
-          const opened = box.style.display !== 'none'
-          box.style.display = opened ? 'none' : ''
+          const opened = toggle.getAttribute('data-open') === '1'
+          for (let i = 0; i < spoil.length; i++) {
+            spoil[i].style.display = opened ? 'none' : ''
+          }
           toggle.setAttribute('data-open', opened ? '0' : '1')
-          toggle.textContent = (opened ? '显示剧透（' : '收起剧透（') + spoilers.length + '）'
+          toggle.textContent = (opened ? '显示剧透（' : '收起剧透（') + spoil.length + '）'
+          title.textContent = '特征（' + (opened ? plainCount : plainCount + spoil.length) + '）'
         })
         head.appendChild(toggle)
-        section.appendChild(box)
       }
 
       dialog.appendChild(section)
@@ -1457,6 +1508,8 @@ export function nativeBootstrap(): void {
       dialog.appendChild(section)
     }
 
+    appendAppearances(dialog, character)
+
     // 弹窗挂在 body 上，拿不到 #vncp-panel 作用域里的 CSS 变量，这里显式搬一份
     const source = document.getElementById('vncp-panel')
     applyPanelTheme(modal)
@@ -1468,16 +1521,94 @@ export function nativeBootstrap(): void {
       if (event.target === modal) closeDetail()
     })
     document.body.appendChild(modal)
+    // 记下这一批角色（当前作品的全员，或搜索结果），←→ 就地换人
+    const siblings = detailSiblings()
+    let index = -1
+    for (let i = 0; i < siblings.length; i++) {
+      if (String(siblings[i] && siblings[i].id) === String(character.id)) {
+        index = i
+        break
+      }
+    }
+    host.__VNCP_DETAIL__ = { list: index >= 0 ? siblings : [character], index: index >= 0 ? index : 0 }
     document.addEventListener('keydown', onDetailKey, true)
   }
 
+  /** 详情弹窗里的那批角色：搜索态用搜索结果，否则用当前作品全员 */
+  function detailSiblings(): any[] {
+    const data = host.__VNCP_DATA__ || null
+    if (!data || !Array.isArray(data.games)) return []
+    const query = searchOf().trim()
+    if (query) {
+      const hits: any[] = []
+      for (let i = 0; i < data.games.length; i++) {
+        const pool = (data.games[i].characters || []) as any[]
+        for (let j = 0; j < pool.length; j++) {
+          if (matchesSearch(pool[j], query)) hits.push(pool[j])
+        }
+      }
+      return hits
+    }
+    const game = currentGame(data)
+    return game && Array.isArray(game.characters) ? game.characters : []
+  }
+
+  /**
+   * 详情弹窗的快捷键。列表页不再抢方向键 —— 用鼠标点卡片本来就更快，
+   * 真正需要键盘的是「看完这个人接着看下一个」「顺手改一下」「顺手出张图」。
+   */
   function onDetailKey(event: KeyboardEvent): void {
-    if (event.key !== 'Escape') return
-    if (document.getElementById('vncp-zoom')) {
-      closeZoom()
+    if (event.key === 'Escape') {
+      if (document.getElementById('vncp-zoom')) {
+        closeZoom()
+        return
+      }
+      closeDetail()
       return
     }
-    closeDetail()
+
+    const state = host.__VNCP_DETAIL__ as { list: any[]; index: number } | undefined
+    if (!state || !state.list || !state.list.length) return
+    const current = state.list[state.index]
+    if (!current) return
+
+    const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown'
+    const backward = event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+    if (forward || backward) {
+      const next = state.index + (forward ? 1 : -1)
+      if (next < 0 || next >= state.list.length) return
+      event.preventDefault()
+      event.stopPropagation()
+      const target = state.list[next]
+      if (!target) return
+      // 就地换人：关掉旧弹窗，用同一套结构重画（滚动位置回到顶部，符合「翻到下一张」的预期）
+      closeDetail()
+      openDetail(target)
+      return
+    }
+
+    const key = String(event.key || '').toLowerCase()
+    if (key === 'e') {
+      event.preventDefault()
+      event.stopPropagation()
+      closeDetail()
+      openEditor(current)
+      return
+    }
+    if (key === 's') {
+      event.preventDefault()
+      event.stopPropagation()
+      const btn = document.querySelector('#vncp-modal .vncp-dialog-actions .vncp-act') as HTMLButtonElement | null
+      void saveCardImage(current, btn || undefined)
+      return
+    }
+    if (key === 't') {
+      const toggle = document.querySelector('#vncp-modal .vncp-trait-toggle') as HTMLButtonElement | null
+      if (!toggle) return
+      event.preventDefault()
+      event.stopPropagation()
+      toggle.click()
+    }
   }
 
   function closeDetail(): void {
@@ -1757,6 +1888,552 @@ export function nativeBootstrap(): void {
     )
   }
 
+  /** 渲染进程 → 主进程的 request/response（preload 暴露的 ipcRenderer.invoke） */
+  function bridgeInvoke(channel: string, payload?: any): Promise<any> {
+    try {
+      const bridge = (window as any).electron
+      const ipc = bridge && bridge.ipcRenderer
+      if (!ipc || typeof ipc.invoke !== 'function') return Promise.resolve(null)
+      return Promise.resolve(ipc.invoke(channel, payload)).catch(function (error: any) {
+        void error
+        return null
+      })
+    } catch (error) {
+      void error
+      return Promise.resolve(null)
+    }
+  }
+
+  function currentWorkName(): string {
+    try {
+      const data = host.__VNCP_DATA__ || null
+      const game = data ? currentGame(data) : null
+      return game ? String(game.workName || '') : ''
+    } catch (error) {
+      void error
+      return ''
+    }
+  }
+
+  function roundRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number
+  ): void {
+    const radius = Math.min(r, w / 2, h / 2)
+    ctx.beginPath()
+    ctx.moveTo(x + radius, y)
+    ctx.lineTo(x + w - radius, y)
+    ctx.quadraticCurveTo(x + w, y, x + w, y + radius)
+    ctx.lineTo(x + w, y + h - radius)
+    ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h)
+    ctx.lineTo(x + radius, y + h)
+    ctx.quadraticCurveTo(x, y + h, x, y + h - radius)
+    ctx.lineTo(x, y + radius)
+    ctx.quadraticCurveTo(x, y, x + radius, y)
+    ctx.closePath()
+  }
+
+  function drawCover(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    x: number,
+    y: number,
+    w: number,
+    h: number
+  ): void {
+    const iw = img.width || w
+    const ih = img.height || h
+    const scale = Math.max(w / iw, h / ih)
+    const dw = iw * scale
+    const dh = ih * scale
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh)
+  }
+
+  function clipText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number): string {
+    if (ctx.measureText(value).width <= maxWidth) return value
+    let text = value
+    while (text.length > 1 && ctx.measureText(text + '…').width > maxWidth) {
+      text = text.slice(0, -1)
+    }
+    return text + '…'
+  }
+
+  function wrapText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number): string[] {
+    const out: string[] = []
+    let line = ''
+    for (let i = 0; i < value.length; i++) {
+      const next = line + value.charAt(i)
+      if (line && ctx.measureText(next).width > maxWidth) {
+        out.push(line)
+        line = value.charAt(i)
+      } else {
+        line = next
+      }
+    }
+    if (line) out.push(line)
+    return out
+  }
+
+  function loadImage(src: string): Promise<HTMLImageElement | null> {
+    return new Promise(function (resolve) {
+      const img = new Image()
+      img.onload = function () {
+        resolve(img)
+      }
+      img.onerror = function () {
+        resolve(null)
+      }
+      img.src = src
+    })
+  }
+
+  /**
+   * 人物卡出图：在渲染进程用 canvas 画好（中文排版、圆角、裁切都由浏览器负责），
+   * 再把 dataURL 交给主进程落盘 —— 不依赖任何截图/栅格化库，也不吃屏幕分辨率。
+   */
+  /**
+   * 人物卡出图：宽 900，高度按内容自适应（不少于 1260）。
+   * 特征区块跟着弹窗里「显示剧透」的状态走：点开了就连剧透标签一起画，没点就只画无剧透的。
+   */
+  async function saveCardImage(character: any, btn?: HTMLButtonElement): Promise<void> {
+    const label = btn ? btn.textContent : ''
+    if (btn) {
+      btn.disabled = true
+      btn.textContent = '正在出图…'
+    }
+    try {
+      const W = 900
+      const pad = 60
+      const dark = isDark()
+      const fg = dark ? '#e9ebf2' : '#1d2027'
+      const dim = dark ? '#9aa3b4' : '#5d6472'
+      const accent = '#8fa2ff'
+      const bg1 = dark ? '#191b21' : '#f6f7fb'
+      const bg2 = dark ? '#101116' : '#e8eaf2'
+      const chipBg = dark ? 'rgba(255,255,255,.06)' : 'rgba(20,24,40,.05)'
+      const chipSpoilBg = dark ? 'rgba(143,162,255,.14)' : 'rgba(80,100,220,.09)'
+      const chipLine = dark ? 'rgba(255,255,255,.14)' : 'rgba(20,24,40,.16)'
+      const font = function (size: number, weight?: string): string {
+        return (weight || '400') + ' ' + size + 'px "Microsoft YaHei","PingFang SC",system-ui,sans-serif'
+      }
+
+      // 头像：优先用本地 data URI；远程图先让主进程缩一张回来，避免 canvas 被跨域污染
+      const avatarSrc = String(character.img || '')
+      const remote = String(character.src || avatarSrc)
+      let uri = avatarSrc
+      if (remote && remote.indexOf('data:') !== 0) {
+        const got = await bridgeInvoke('character-atlas:image', { url: remote })
+        if (typeof got === 'string' && got.indexOf('data:') === 0) uri = got
+      }
+      const avatar = uri && uri.indexOf('data:') === 0 ? await loadImage(uri) : null
+
+      // 特征：弹窗里点过「显示剧透」就连剧透一起导出，没点就只导无剧透的
+      const toggleEl = document.querySelector('#vncp-modal .vncp-trait-toggle') as HTMLElement | null
+      const spoilerOpen = !!toggleEl && toggleEl.getAttribute('data-open') === '1'
+      const traitGroups: Array<{ g: string; items: any[] }> = []
+      const rawTraits = (character.traits || []) as any[]
+      for (let i = 0; i < rawTraits.length; i++) {
+        const item = rawTraits[i]
+        if (!item || !item.n) continue
+        if (item.sp && !spoilerOpen) continue
+        const group = String(item.g || '其他')
+        let bucket: { g: string; items: any[] } | null = null
+        for (let k = 0; k < traitGroups.length; k++) {
+          if (traitGroups[k].g === group) bucket = traitGroups[k]
+        }
+        if (!bucket) {
+          bucket = { g: group, items: [] }
+          traitGroups.push(bucket)
+        }
+        bucket.items.push(item)
+      }
+      let traitCount = 0
+      for (let i = 0; i < traitGroups.length; i++) traitCount += traitGroups[i].items.length
+
+      const facts = (character.facts || []) as Array<{ k: string; v: string }>
+      const about = String(character.about || character.intro || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      const work = currentWorkName()
+      const chipFont = font(21, '500')
+
+      /** 画（或只量）特征区块，返回这一块结束时的 y */
+      const paintTraits = function (c: CanvasRenderingContext2D, top: number): number {
+        let cursor = top
+        for (let gi = 0; gi < traitGroups.length; gi++) {
+          const group = traitGroups[gi]
+          c.font = font(21)
+          const indent = pad + c.measureText(group.g).width + 16
+          let x = indent
+          let rowTop = cursor
+          c.fillStyle = dim
+          c.fillText(group.g, pad, rowTop + 33)
+          for (let j = 0; j < group.items.length; j++) {
+            const item = group.items[j]
+            const text = String(item.n) + (item.s ? '·性' : '')
+            c.font = chipFont
+            const width = Math.ceil(c.measureText(text).width) + 26
+            if (j > 0 && x + width > W - pad) {
+              rowTop += 46
+              x = indent
+            }
+            roundRect(c, x, rowTop + 8, width, 38, 19)
+            c.fillStyle = item.sp ? chipSpoilBg : chipBg
+            c.fill()
+            c.strokeStyle = item.sp ? accent : chipLine
+            c.lineWidth = 1
+            c.stroke()
+            c.fillStyle = item.sp ? accent : fg
+            c.fillText(text, x + 13, rowTop + 34)
+            x += width + 8
+          }
+          cursor = rowTop + 66
+        }
+        return cursor
+      }
+
+      // 先量一遍：特征折行几行、简介折行几行，据此决定图片高度（简介不再被截断）
+      const measure = document.createElement('canvas').getContext('2d')
+      if (!measure) throw new Error('拿不到 2D 画布')
+      const baseY = 70 + 400 + 56
+      const factsRows = facts.length ? Math.ceil(facts.length / 2) * 40 : 0
+      const factsBlock = facts.length ? 40 + factsRows + 26 : 0
+      const traitsTop = baseY + factsBlock + (traitGroups.length ? 40 : 0)
+      const traitsBottom = traitGroups.length ? paintTraits(measure, traitsTop) + 10 : traitsTop
+      measure.font = font(21)
+      const introLines = about ? wrapText(measure, about, W - pad * 2) : []
+      const introBlock = introLines.length ? 40 + introLines.length * 36 : 0
+      const H = Math.max(880, Math.round(traitsBottom + introBlock + 150))
+
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = H
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('拿不到 2D 画布')
+
+      const grad = ctx.createLinearGradient(0, 0, W, H)
+      grad.addColorStop(0, bg1)
+      grad.addColorStop(1, bg2)
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, W, H)
+      ctx.fillStyle = accent
+      ctx.fillRect(0, 0, W, 4)
+
+      const avaW = 300
+      const avaH = 400
+      const avaX = pad
+      const avaY = 70
+      roundRect(ctx, avaX, avaY, avaW, avaH, 18)
+      ctx.save()
+      ctx.clip()
+      if (avatar) {
+        drawCover(ctx, avatar, avaX, avaY, avaW, avaH)
+      } else {
+        ctx.fillStyle = dark ? '#232631' : '#d8dceb'
+        ctx.fillRect(avaX, avaY, avaW, avaH)
+        ctx.fillStyle = dim
+        ctx.font = font(120, '500')
+        ctx.textAlign = 'center'
+        ctx.fillText(String(character.n || '?').slice(0, 1), avaX + avaW / 2, avaY + avaH / 2 + 42)
+        ctx.textAlign = 'left'
+      }
+      ctx.restore()
+
+      const textX = avaX + avaW + 44
+      let y = avaY + 48
+      ctx.fillStyle = fg
+      ctx.font = font(46, '600')
+      ctx.fillText(clipText(ctx, String(character.n || ''), W - textX - pad), textX, y)
+      y += 46
+      const alt = String(character.alt || '')
+      if (alt && alt !== String(character.n || '')) {
+        ctx.fillStyle = dim
+        ctx.font = font(24)
+        ctx.fillText(clipText(ctx, alt, W - textX - pad), textX, y)
+        y += 40
+      }
+      const info: string[] = []
+      if (character.role) info.push(String(character.role))
+      if (character.cv) info.push('CV · ' + String(character.cv))
+      if (character.meta) info.push(String(character.meta))
+      ctx.font = font(22)
+      for (let i = 0; i < info.length; i++) {
+        ctx.fillStyle = dim
+        ctx.fillText(clipText(ctx, info[i], W - textX - pad), textX, y)
+        y += 34
+      }
+
+      let cy = baseY
+      if (facts.length) {
+        ctx.fillStyle = accent
+        ctx.font = font(22, '500')
+        ctx.fillText('资料', pad, cy)
+        cy += 40
+        const colW = Math.floor((W - pad * 2) / 2)
+        for (let i = 0; i < facts.length; i++) {
+          const col = i % 2
+          const row = Math.floor(i / 2)
+          const fx = pad + col * colW
+          const fy = cy + row * 40
+          ctx.fillStyle = dim
+          ctx.font = font(21)
+          ctx.fillText(clipText(ctx, String(facts[i].k), 170), fx, fy)
+          ctx.fillStyle = fg
+          ctx.font = font(21, '500')
+          ctx.fillText(clipText(ctx, String(facts[i].v), colW - 190), fx + 160, fy)
+        }
+        cy += factsRows + 26
+      }
+
+      if (traitGroups.length) {
+        ctx.fillStyle = accent
+        ctx.font = font(22, '500')
+        ctx.fillText('特征（' + traitCount + '）' + (spoilerOpen ? ' · 含剧透' : ''), pad, cy)
+        cy += 40
+        cy = paintTraits(ctx, cy) + 10
+      }
+
+      if (introLines.length) {
+        ctx.fillStyle = accent
+        ctx.font = font(22, '500')
+        ctx.fillText('简介', pad, cy)
+        cy += 40
+        ctx.fillStyle = fg
+        ctx.font = font(21)
+        for (let i = 0; i < introLines.length; i++) {
+          ctx.fillText(introLines[i], pad, cy)
+          cy += 36
+        }
+      }
+
+      ctx.fillStyle = dim
+      ctx.font = font(19)
+      ctx.fillText('Character Atlas · 人物图鉴' + (work ? ' · ' + work : ''), pad, H - 40)
+      ctx.textAlign = 'right'
+      ctx.fillStyle = accent
+      ctx.font = font(18)
+      ctx.fillText(new Date().toLocaleDateString('zh-CN'), W - pad, H - 40)
+      ctx.textAlign = 'left'
+
+      const dataUrl = canvas.toDataURL('image/png')
+      const safeName = String(character.n || 'character').replace(/[\\/:*?"<>|]/g, '_')
+      const saved = await bridgeInvoke('character-atlas:save-image', {
+        name: safeName + '.png',
+        dataUrl: dataUrl
+      })
+      if (saved && saved.ok) setStatus('ok', '✅ 已保存人物卡：' + String(saved.path || ''))
+      else if (saved && saved.canceled) setStatus('ok', '已取消出图')
+      else setStatus('error', '❌ 出图失败：' + String((saved && saved.error) || '主进程没响应'))
+    } catch (error) {
+      setStatus('error', '❌ 出图失败：' + (error instanceof Error ? error.message : String(error)))
+    } finally {
+      if (btn) {
+        btn.disabled = false
+        btn.textContent = label || '保存成图片'
+      }
+    }
+  }
+
+  /** 右键 → 换成本地图片（复制进缓存目录并写入个人修正层） */
+  function replaceImage(character: any): void {
+    const gameId = routeGameId()
+    const id = String((character && character.id) || '')
+    if (!gameId || !id) {
+      setStatus('error', '❌ 没拿到游戏 / 角色 id，换图失败')
+      return
+    }
+    setStatus('loading', '正在选择本地图片…')
+    void bridgeInvoke('character-atlas:pick-image', {})
+      .then(function (picked: any) {
+        if (!picked || !picked.ok) {
+          if (picked && picked.canceled) setStatus('ok', '已取消换图')
+          else setStatus('error', '❌ ' + String((picked && picked.error) || '打不开文件对话框'))
+          return null
+        }
+        return bridgeInvoke('character-atlas:set-image', {
+          gameId: gameId,
+          charId: id,
+          filePath: String(picked.path || '')
+        }).then(function (res: any) {
+          if (res && res.ok) setStatus('ok', '✅ 已换图：' + String(character.n || ''))
+          else setStatus('error', '❌ 换图失败：' + String((res && res.error) || '主进程没响应'))
+          return null
+        })
+      })
+      .catch(function (error: any) {
+        setStatus('error', '❌ 换图失败：' + String(error instanceof Error ? error.message : error))
+      })
+  }
+
+  /** 弹窗里的「登场作品」：先占位，再向主进程要 /appearances 的结果 */
+  let appearSeq = 0
+  function appendAppearances(dialog: HTMLElement, character: any): void {
+    const id = String(character.id || '')
+    if (!id) return
+    const section = el('div', 'vncp-section')
+    section.appendChild(el('div', 'vncp-section-title', '登场作品'))
+    const box = el('div', 'vncp-appear')
+    box.appendChild(el('div', 'vncp-note', '正在读取…'))
+    section.appendChild(box)
+    dialog.appendChild(section)
+
+    const seq = ++appearSeq
+    void bridgeInvoke('character-atlas:appearances', { charId: id }).then(function (res: any) {
+      if (seq !== appearSeq) return
+      while (box.firstChild) box.removeChild(box.firstChild)
+      const items = (res && res.items) || []
+      if (!items.length) {
+        box.appendChild(
+          el('div', 'vncp-note', res && res.error ? '读取失败：' + String(res.error) : '没有可显示的登场作品')
+        )
+        return
+      }
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        const row = el('button', 'vncp-appear-row', '') as HTMLButtonElement
+        row.type = 'button'
+        row.setAttribute('data-link', item.url ? '1' : '0')
+        row.appendChild(el('span', '', String(item.title || '')))
+        if (item.role) row.appendChild(el('span', 'vncp-appear-role', String(item.role)))
+        if (item.url) {
+          row.title = '在浏览器里打开这部作品（KunGalgame）'
+          row.addEventListener('click', function (event) {
+            event.preventDefault()
+            event.stopPropagation()
+            openExternal(String(item.url))
+          })
+        } else {
+          row.title = String(item.title || '')
+        }
+        box.appendChild(row)
+      }
+    })
+  }
+
+  /** 缓存统计：作品数 / 人物数 / 图片体积 / 最早最近缓存，可清理过期条目 */
+  function openStats(): void {
+    closeDetail()
+    const modal = el('div', 'vncp-modal')
+    modal.id = 'vncp-modal'
+    applyPanelTheme(modal)
+    const dialog = el('div', 'vncp-dialog')
+
+    const closeBtn = el('button', 'vncp-dialog-close', '×') as HTMLButtonElement
+    closeBtn.type = 'button'
+    closeBtn.title = '关闭'
+    closeBtn.addEventListener('click', function () {
+      closeDetail()
+    })
+    dialog.appendChild(closeBtn)
+    dialog.appendChild(el('div', 'vncp-dialog-title', '缓存统计'))
+    dialog.appendChild(el('div', 'vncp-dialog-sub', '只读本地数据库与图片目录，不联网。'))
+
+    const box = el('div', 'vncp-stats')
+    dialog.appendChild(box)
+    const actions = el('div', 'vncp-dialog-actions')
+    const prune = el('button', 'vncp-act', '清理过期缓存') as HTMLButtonElement
+    prune.type = 'button'
+    prune.title = '删掉超过「缓存有效期」的人物数据（图片保留）'
+    const openDir = el('button', 'vncp-act', '打开缓存目录') as HTMLButtonElement
+    openDir.type = 'button'
+    openDir.title = '在文件管理器里打开图片缓存目录'
+    openDir.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      enqueue({ cmd: 'open-dir' })
+    })
+    actions.appendChild(prune)
+    actions.appendChild(openDir)
+    dialog.appendChild(actions)
+
+    modal.appendChild(dialog)
+    modal.addEventListener('click', function (event) {
+      if (event.target === modal) closeDetail()
+    })
+    document.body.appendChild(modal)
+
+    const paint = function (data: any): void {
+      while (box.firstChild) box.removeChild(box.firstChild)
+      if (!data || data.error) {
+        box.appendChild(el('b', '', '读取失败'))
+        box.appendChild(el('span', '', String((data && data.error) || '主进程没响应')))
+        return
+      }
+      const rows: Array<[string, string]> = [
+        ['已缓存作品', String(data.games || 0) + ' 部'],
+        ['人物总数', String(data.characters || 0) + ' 人'],
+        ['图片文件', String(data.images || 0) + ' 个 · ' + String(data.imageSize || '0 B')],
+        ['缓存目录', String(data.dir || '—')],
+        ['最早缓存', String(data.oldest || '—')],
+        ['最近缓存', String(data.newest || '—')],
+        ['有效期', String(data.ttlHours || 0) + ' 小时（过期后打开会重新刮）']
+      ]
+      for (let i = 0; i < rows.length; i++) {
+        box.appendChild(el('b', '', rows[i][0]))
+        box.appendChild(el('span', '', rows[i][1]))
+      }
+    }
+    void bridgeInvoke('character-atlas:stats', {}).then(paint)
+
+    prune.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!window.confirm('清理所有已过期的人物数据缓存？图片不会被删除。')) return
+      prune.disabled = true
+      prune.textContent = '清理中…'
+      void bridgeInvoke('character-atlas:prune-cache', {}).then(function (res: any) {
+        prune.disabled = false
+        prune.textContent = '清理过期缓存'
+        if (res && res.ok) setStatus('ok', '✅ 已清理 ' + String(res.removed || 0) + ' 部作品的过期缓存')
+        else setStatus('error', '❌ 清理失败：' + String((res && res.error) || '主进程没响应'))
+        void bridgeInvoke('character-atlas:stats', {}).then(paint)
+      })
+    })
+  }
+
+  // ---------- 快捷键 ----------
+  /**
+   * 列表页只保留 `/`（聚焦搜索）与 Esc（关右键菜单）。
+   * 方向键 / Enter 不再抢：卡片是给人用鼠标点的，键盘留给详情弹窗（←→ 换人、E 编辑、S 出图、T 剧透）。
+   */
+  function attachKeys(): void {
+    if (host.__VNCP_KEYS__) return
+    host.__VNCP_KEYS__ = true
+    document.addEventListener(
+      'keydown',
+      function (event: KeyboardEvent) {
+        const target = event.target as HTMLElement | null
+        const typing =
+          !!target &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+
+        if (event.key === 'Escape') {
+          if (document.getElementById('vncp-menu')) {
+            event.preventDefault()
+            closeMenu()
+          }
+          return
+        }
+        // 弹窗开着时，键盘整个让给弹窗自己的快捷键
+        if (document.getElementById('vncp-modal')) return
+        if (typing) return
+
+        if (event.key === '/') {
+          const box = document.querySelector('#vncp-panel .vncp-search') as HTMLInputElement | null
+          if (!box) return
+          event.preventDefault()
+          box.focus()
+          box.select()
+        }
+      },
+      true
+    )
+  }
+
   function buildCard(character: any, workName?: string): HTMLElement {
     const card = el('div', 'vncp-card')
     const avatar = el('div', 'vncp-ava')
@@ -1784,7 +2461,19 @@ export function nativeBootstrap(): void {
     if (cardAlt && cardAlt !== String(character.n || '')) {
       body.appendChild(el('div', 'vncp-sub', cardAlt))
     }
-    if (character.cv) body.appendChild(el('div', 'vncp-sub', text('cv') + ' · ' + character.cv))
+    if (character.cv) {
+      const cvLine = el('div', 'vncp-sub')
+      cvLine.appendChild(el('span', undefined, text('cv') + ' · '))
+      const cvHit = el('span', 'vncp-cv-hit', String(character.cv))
+      cvHit.title = '在所有作品里搜这位声优的角色'
+      cvHit.addEventListener('click', function (event: MouseEvent) {
+        event.preventDefault()
+        event.stopPropagation()
+        setSearch(String(character.cv))
+      })
+      cvLine.appendChild(cvHit)
+      body.appendChild(cvLine)
+    }
     if (character.meta) body.appendChild(el('div', 'vncp-sub', String(character.meta)))
     if (character.intro) body.appendChild(el('div', 'vncp-intro', String(character.intro)))
 
@@ -1817,6 +2506,8 @@ export function nativeBootstrap(): void {
       event.stopPropagation()
       openMenu(event, [
         { label: '编辑这个人的资料…', run: function () { openEditor(character) } },
+        { label: '换成本地图片…', run: function () { replaceImage(character) } },
+        { label: '保存人物卡图片…', run: function () { void saveCardImage(character) } },
         { label: '从本作人物栏删除', danger: true, run: function () { removeCharacter(character) } }
       ])
     })
@@ -1915,6 +2606,7 @@ export function nativeBootstrap(): void {
     // 记下这次画的是「哪部作品 + 哪版数据」，tick 靠它判断需不需要重画
     host.__VNCP_KEY__ = pageKey(data)
     applyFont(panel)
+    attachKeys()
     // 再保险一次：只允许存在一个我们自己画的面板
     const leftovers = stalePanels()
     for (let i = 0; i < leftovers.length; i++) {
@@ -2302,6 +2994,7 @@ export function nativeBootstrap(): void {
       ['导出人物数据', 'export'],
       ['导入人物数据', 'import'],
       ['清空全部人物', 'clear-all'],
+      ['缓存统计', 'stats'],
       ['打开缓存目录', 'open-dir']
     ]
     for (let i = 0; i < tools.length; i++) {
@@ -2318,6 +3011,11 @@ export function nativeBootstrap(): void {
         if (spec[1] === 'clear-all' && !window.confirm('确定清空所有作品的人物缓存吗？')) return
         const status = document.getElementById('vncp-settings-status')
         if (status) status.textContent = '⏳ 已提交：' + spec[0]
+        if (spec[1] === 'stats') {
+          if (status) status.textContent = ''
+          openStats()
+          return
+        }
         enqueue({ cmd: spec[1] })
       })
       actions.appendChild(btn)

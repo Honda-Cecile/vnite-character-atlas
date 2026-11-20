@@ -19,8 +19,10 @@ Thumbs.db
 .vscode/
 *.swp
 
-# 本地环境
+# 本地环境 / 发布用的 token
 .env
 .env.local
-releases/
 .secrets/
+releases/
+publish.cmd
+release.cmd

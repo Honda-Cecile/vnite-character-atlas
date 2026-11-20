@@ -30,6 +30,29 @@ import { ImageCache } from './images'
  */
 
 const NATIVE_CMD = 'character-atlas:native-cmd'
+/**
+ * 从 `api.ipc.handle` 的实参里挑出「业务 payload」。
+ *
+ * Vnite 的 `ipc` 就是它自己的 IPCManager（`listener.handle` → `ipcMain.handle`），
+ * 所以 handler 收到的是 `(event, ...args)` —— 第一个参数永远是 IpcMainInvokeEvent。
+ * 早期版本按 `(payload)` 写，结果 `payload.dataUrl` 全是 undefined（表现为
+ * 「出图失败：不是有效的图片数据」、放大图不刷新、登场作品拿不到 charId）。
+ * 这里统一解包：跳过事件对象，取第一个普通参数；探针直接按 `(payload)` 调用也照旧能用。
+ */
+function ipcPayload<T = Record<string, any>>(args: any[]): T {
+  const isEvent = (value: any): boolean =>
+    !!value &&
+    typeof value === 'object' &&
+    (('sender' in value && 'frameId' in value) ||
+      typeof value.reply === 'function' ||
+      typeof value.preventDefault === 'function' ||
+      'returnValue' in value)
+  for (const arg of args) {
+    if (!isEvent(arg)) return (arg === undefined || arg === null ? {} : arg) as T
+  }
+  return {} as T
+}
+
 /** 标题相似度阈值：低于它就当没匹配上，避免把人物挂到别的游戏 */
 const TITLE_ACCEPT = 0.8
 
@@ -43,7 +66,17 @@ const IPC = {
   exportData: 'character-atlas:export',
   importData: 'character-atlas:import',
   /** 打开人物缓存目录 */
-  openCacheDir: 'character-atlas:open-cache-dir'
+  openCacheDir: 'character-atlas:open-cache-dir',
+  /** 缓存统计 / 清理过期缓存 */
+  stats: 'character-atlas:stats',
+  pruneCache: 'character-atlas:prune-cache',
+  /** 详情弹窗的「登场作品」（懒加载） */
+  appearances: 'character-atlas:appearances',
+  /** 右键换图：选本地图片 → 复制进缓存目录 + 写个人修正层 */
+  pickImage: 'character-atlas:pick-image',
+  setImage: 'character-atlas:set-image',
+  /** 人物卡出图：渲染进程画好的 dataURL 落盘 */
+  saveImage: 'character-atlas:save-image'
 } as const
 
 /**
@@ -334,20 +367,23 @@ export class CharacterPanelService {
 
       // 渲染进程 → 主进程的主通道：preload 的 ipcRenderer.send(...)
       this.registerNativeCommand()
-      ipc.handle(IPC.get, async (payload: { gameId: string; force?: boolean }) => {
-        if (!payload?.gameId) return null
+      ipc.handle(IPC.get, async (...args: any[]) => {
+        const payload = ipcPayload<{ gameId?: string; force?: boolean }>(args)
+        if (!payload.gameId) return null
         try {
           return await this.getCharacters(payload.gameId, { force: payload.force === true })
         } catch (error) {
           return { error: error instanceof Error ? error.message : String(error) }
         }
       })
-      ipc.handle(IPC.refresh, async (payload: { gameId: string }) => {
-        if (!payload?.gameId) return null
+      ipc.handle(IPC.refresh, async (...args: any[]) => {
+        const payload = ipcPayload<{ gameId?: string }>(args)
+        if (!payload.gameId) return null
         return this.getCharacters(payload.gameId, { force: true })
       })
-      ipc.handle(IPC.clear, async (payload: { gameId?: string }) => {
-        if (payload?.gameId) {
+      ipc.handle(IPC.clear, async (...args: any[]) => {
+        const payload = ipcPayload<{ gameId?: string }>(args)
+        if (payload.gameId) {
           await this.cache.invalidate(payload.gameId)
           this.lastPanel.delete(payload.gameId)
           return { ok: true, scope: payload.gameId }
@@ -357,8 +393,20 @@ export class CharacterPanelService {
       ipc.handle(IPC.exportData, async () => this.exportCharacters())
       ipc.handle(IPC.importData, async () => this.importCharacters())
       ipc.handle(IPC.openCacheDir, async () => this.openCacheDir())
-      ipc.handle(IPC.image, async (payload: { url: string }) => {
-        const url = String(payload?.url || '')
+      ipc.handle(IPC.stats, async () => this.cacheStats())
+      ipc.handle(IPC.pruneCache, async () => this.pruneCache())
+      ipc.handle(IPC.appearances, async (...args: any[]) =>
+        this.appearances(String(ipcPayload<{ charId?: string }>(args).charId || ''))
+      )
+      ipc.handle(IPC.pickImage, async () => this.pickImage())
+      ipc.handle(IPC.setImage, async (...args: any[]) =>
+        this.setImage(ipcPayload<{ gameId?: string; charId?: string; filePath?: string }>(args))
+      )
+      ipc.handle(IPC.saveImage, async (...args: any[]) =>
+        this.saveImage(ipcPayload<{ name?: string; dataUrl?: string }>(args))
+      )
+      ipc.handle(IPC.image, async (...args: any[]) => {
+        const url = String(ipcPayload<{ url?: string }>(args).url || '')
         if (!url) return null
         // 主进程没有 native 注入器（例如停用了原生标签页）时也能用，直接走图片缓存
         const large = this.native
@@ -373,7 +421,13 @@ export class CharacterPanelService {
         IPC.image,
         IPC.exportData,
         IPC.importData,
-        IPC.openCacheDir
+        IPC.openCacheDir,
+        IPC.stats,
+        IPC.pruneCache,
+        IPC.appearances,
+        IPC.pickImage,
+        IPC.setImage,
+        IPC.saveImage
       )
     }
 
@@ -836,7 +890,7 @@ export class CharacterPanelService {
     if (!this.native?.available) return
     // 用户删掉/改过的角色在每次下发前统一叠一遍：
     // 缓存里永远是刮削原样，展示层永远是「刮削 + 个人修正」
-    const shaped = await this.overrides.apply(gameId, panel)
+    const shaped = await this.inlineLocalImages(await this.overrides.apply(gameId, panel))
     if (!this.gameNames.has(gameId)) {
       try {
         await this.readIdentifier(gameId)
@@ -859,7 +913,7 @@ export class CharacterPanelService {
     if (!force) {
       const cached = await this.cache.getPanel(gameId, this.config.cacheTtlHours)
       if (cached) {
-        const shaped = await this.overrides.apply(gameId, cached.data)
+        const shaped = await this.inlineLocalImages(await this.overrides.apply(gameId, cached.data))
         this.lastPanel.set(gameId, shaped)
         void this.publishNative(gameId, shaped)
         if (!cached.fresh && this.config.autoOnLaunch) {
@@ -1152,6 +1206,237 @@ export class CharacterPanelService {
       return { ok: true, path: dir }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error), path: dir }
+    }
+  }
+
+  /** 个人修正里的 `local:` 图片转成 data URI（渲染层不能直接读 file://） */
+  private async inlineLocalImages(panel: CharacterPanelData): Promise<CharacterPanelData> {
+    const characters = Array.isArray(panel.characters) ? panel.characters : []
+    let touched = false
+    const next: typeof characters = []
+    for (const character of characters) {
+      let item = character
+      const imageUrl = String(character.imageUrl || '')
+      if (imageUrl.indexOf('local:') === 0) {
+        const uri = await this.images.resolve(imageUrl, 336)
+        if (uri) {
+          item = { ...item, imageUrl: uri }
+          touched = true
+        }
+      }
+      const figureUrl = String(item.figureUrl || '')
+      if (figureUrl.indexOf('local:') === 0) {
+        const uri = await this.images.resolve(figureUrl, 640)
+        if (uri) {
+          item = { ...item, figureUrl: uri }
+          touched = true
+        }
+      }
+      next.push(item)
+    }
+    if (!touched) return panel
+    return { ...panel, characters: next }
+  }
+
+  private formatBytes(bytes: number): string {
+    const size = Number(bytes) || 0
+    if (size < 1024) return size + ' B'
+    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
+    return (size / 1024 / 1024).toFixed(2) + ' MB'
+  }
+
+  private formatTime(ms: number): string {
+    const date = new Date(ms)
+    const pad = (value: number) => String(value).padStart(2, '0')
+    return (
+      date.getFullYear() +
+      '-' +
+      pad(date.getMonth() + 1) +
+      '-' +
+      pad(date.getDate()) +
+      ' ' +
+      pad(date.getHours()) +
+      ':' +
+      pad(date.getMinutes())
+    )
+  }
+
+  /** 缓存统计：作品数 / 人物数 / 图片体积 / 最早最近缓存时间 */
+  async cacheStats(): Promise<Record<string, unknown>> {
+    try {
+      const games = (await this.api.GameDB.getAllGames().catch(() => ({}))) as Record<string, any>
+      let count = 0
+      let characters = 0
+      let oldest = 0
+      let newest = 0
+      for (const gameId of Object.keys(games || {})) {
+        const hit = await this.cache.getPanel(gameId, this.config.cacheTtlHours).catch(() => null)
+        if (!hit) continue
+        count++
+        characters += Array.isArray(hit.data.characters) ? hit.data.characters.length : 0
+        if (!oldest || hit.cachedAt < oldest) oldest = hit.cachedAt
+        if (hit.cachedAt > newest) newest = hit.cachedAt
+      }
+      const images = await this.images.stats()
+      return {
+        ok: true,
+        games: count,
+        characters,
+        images: images.files,
+        imageSize: this.formatBytes(images.bytes),
+        dir: this.images.dirSync(),
+        oldest: oldest ? this.formatTime(oldest) : '',
+        newest: newest ? this.formatTime(newest) : '',
+        ttlHours: this.config.cacheTtlHours
+      }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 清理超过「缓存有效期」的条目（图片保留，避免把用户换的图删掉） */
+  async pruneCache(): Promise<Record<string, unknown>> {
+    try {
+      const games = (await this.api.GameDB.getAllGames().catch(() => ({}))) as Record<string, any>
+      let removed = 0
+      for (const gameId of Object.keys(games || {})) {
+        const hit = await this.cache.getPanel(gameId, this.config.cacheTtlHours).catch(() => null)
+        if (!hit || hit.fresh) continue
+        await this.cache.invalidate(gameId)
+        this.lastPanel.delete(gameId)
+        removed++
+      }
+      this.log(`缓存清理完成：${removed} 部作品的过期数据已删除`)
+      return { ok: true, removed }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 角色的登场作品（详情弹窗里懒加载，点一行就能跳回 KunGalgame） */
+  async appearances(charId: string): Promise<Record<string, unknown>> {
+    const id = String(charId || '').trim()
+    if (!id) return { error: '缺少角色 id' }
+    try {
+      const body = (await this.client.get(
+        `/catalog/characters/${encodeURIComponent(id)}/appearances?limit=50&include_total=false`
+      )) as any
+      const items = Array.isArray(body?.items) ? body.items : []
+      const roleOf = (value: string): string => {
+        if (value === 'main') return '主角'
+        if (value === 'secondary') return '配角'
+        if (value === 'appears') return '登场'
+        return ''
+      }
+      // 作品名优先本地化（zh-Hans），没有再退回 display_name（往往只有原文）
+      const titleOf = (work: any): string => {
+        const localized = work && work.localized ? work.localized : {}
+        const order = ['zh-Hans', 'zh-Hant', 'ja', 'en']
+        for (const key of order) {
+          const slot = localized[key]
+          const value = slot && typeof slot.value === 'string' ? slot.value.trim() : ''
+          if (!value) continue
+          const first = value.split(/[|｜]/)[0].trim()
+          if (first) return first
+        }
+        return String((work && work.display_name) || '').trim()
+      }
+      const out = items
+        .map((item: any) => {
+          const work = item && item.work ? item.work : {}
+          const links = Array.isArray(work.links) ? work.links : []
+          const url = links.length && links[0] && links[0].url ? String(links[0].url) : ''
+          const claim = work && work.claim ? work.claim : null
+          return {
+            id: String(work.id || ''),
+            title: titleOf(work),
+            role: roleOf(String((item && item.roster_role) || '')),
+            url,
+            site: claim && claim.site ? String(claim.site) : ''
+          }
+        })
+        .filter((item: any) => item.title)
+      return { ok: true, items: out }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 右键换图第 1 步：选一张本地图片 */
+  async pickImage(): Promise<Record<string, unknown>> {
+    const dialog = this.dialog()
+    if (!dialog) return { error: '拿不到 Electron 的文件对话框' }
+    try {
+      const result = await dialog.showOpenDialog({
+        title: '选择一张图片替换这个角色的头像',
+        properties: ['openFile'],
+        filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
+      })
+      if (!result || result.canceled || !result.filePaths || !result.filePaths[0]) {
+        return { canceled: true }
+      }
+      return { ok: true, path: String(result.filePaths[0]) }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 右键换图第 2 步：复制进缓存目录 + 写修正层 + 重新下发 */
+  async setImage(payload: { gameId?: string; charId?: string; filePath?: string }): Promise<
+    Record<string, unknown>
+  > {
+    const gameId = String(payload?.gameId || '')
+    const charId = String(payload?.charId || '')
+    const file = String(payload?.filePath || '')
+    if (!gameId || !charId || !file) return { error: '参数不完整' }
+    try {
+      const stored = await this.images.storeLocal(file)
+      if (!stored) return { error: '图片读取失败' }
+      await this.overrides.setImage(gameId, charId, { imageFile: stored })
+      await this.republish(gameId)
+      this.log(`已换图：${charId} → ${stored}`)
+      return { ok: true, path: stored }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 人物卡出图：把渲染进程画好的 PNG dataURL 写到用户选的位置 */
+  async saveImage(payload: { name?: string; dataUrl?: string } | string): Promise<
+    Record<string, unknown>
+  > {
+    // 兼容三种形态：`{dataUrl}`、直接传 dataURL 字符串、以及老渲染端可能给 `{url}`
+    const raw =
+      typeof payload === 'string'
+        ? payload
+        : String(
+            (payload && ((payload as any).dataUrl || (payload as any).url || (payload as any).data)) ||
+              ''
+          )
+    const dataUrl = raw.trim()
+    if (dataUrl.indexOf('data:image/') !== 0) {
+      this.log(
+        `出图载荷异常: keys=${typeof payload === 'object' ? Object.keys(payload || {}).join(',') : typeof payload} len=${dataUrl.length} head=${dataUrl.slice(0, 24)}`
+      )
+      return { error: '不是有效的图片数据' }
+    }
+    const dialog = this.dialog()
+    if (!dialog) return { error: '拿不到 Electron 的文件对话框' }
+    try {
+      const rawName = typeof payload === 'object' && payload ? (payload as any).name : ''
+      const safeName = String(rawName || 'character-card.png').replace(/[\\/:*?"<>|]/g, '_')
+      const result = await dialog.showSaveDialog({
+        title: '保存人物卡',
+        defaultPath: path.join(this.dataDirHint(), safeName),
+        filters: [{ name: 'PNG', extensions: ['png'] }]
+      })
+      if (!result || result.canceled || !result.filePath) return { canceled: true }
+      const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+      await fs.promises.writeFile(String(result.filePath), Buffer.from(base64, 'base64'))
+      this.log(`人物卡已保存: ${result.filePath}`)
+      return { ok: true, path: String(result.filePath) }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
     }
   }
 
